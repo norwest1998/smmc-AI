@@ -1,52 +1,42 @@
-/* overallWriter.gs
- *  Append computed totals to the Overall Results spreadsheet
- *  (one row per competitor per competition, one column per round) 
-/*********************************************
- * Persist / retrieve regatta workbook ids
- */
+function overallWriter(bookID, parsed, members, rankedScores) {
+  const ss = SpreadsheetApp.openById(bookID);
+  const sheetName = "Overall Results";
+  let sh = ss.getSheetByName(sheetName) || ss.insertSheet(sheetName, 0);
+  
+  // 1. Metadata & Series Headers
+  const lastRaceStr = "Last Race : " + parsed.date;
+  sh.getRange("B2:C2").merge().setValue(lastRaceStr);
+  sh.getRange("F2").setValue("DNC");
 
-function writeOverallResults(parsed, dailyRows) {
-  const regatta = parsed.regattaName;
-  const dateKey = Utilities.formatDate(parsed.date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const countRounds = ss.getSheets().length - 1; 
+  sh.getRange("B3:C3").merge().setValue("Rounds : " + countRounds);
 
-  const book = SpreadsheetApp.openById(
-    getConfigValue(`regattaWorkbookId_${regatta}`)
-  );
+  const seriesHeaders = [["Attended", "Sail #", "Member Name", "Rank", "Total", "Discard"]];
+  sh.getRange("A4:F4").setValues(seriesHeaders);
 
-  let sh = book.getSheetByName('OverallResults');
-  if (!sh) {
-    sh = book.insertSheet('OverallResults');
-    sh.getRange(3,1,1,6).setValues([
-      ['Attended','Name','Sail','Total','Discard','Net']
-    ]);
+  // 2. Populate Members
+  const memberData = [];
+  if (members && Array.isArray(members)) {
+    members.forEach(m => memberData.push(["", m.sailnumber, m.membername, "", "", ""]));
   }
 
-  let headers = sh.getRange(3,1,1,sh.getLastColumn()).getValues()[0];
-  if (!headers.includes(dateKey)) {
-    headers.push(dateKey);
-    sh.getRange(3,1,1,headers.length).setValues([headers]);
+  if (memberData.length > 0) {
+    sh.getRange(5, 1, memberData.length, 6).setValues(memberData);
+    const lastRow = 4 + memberData.length;
+    if (sh.getMaxRows() > lastRow) sh.deleteRows(lastRow + 1, sh.getMaxRows() - lastRow);
   }
 
-  const roundCol = headers.indexOf(dateKey) + 1;
-  const roundDNC = parsed.raceCount * (parsed.competitorCount + 1);
+  // 3. Add Round Metadata (Column G)
+  const roundColIdx = 7; 
+  const compCount = Number(parsed.competitorCount) || 0;
+  const raceCount = rankedScores[0].racescore.length;
+  const dncScore = (compCount + 1) * raceCount;
 
-  sh.getRange(1, roundCol).setValue('DNC');
-  sh.getRange(2, roundCol).setValue(roundDNC);
+  sh.getRange(2, roundColIdx).setValue(dncScore);
+  sh.getRange(3, roundColIdx).setValue(parsed.date);
+  sh.getRange(4, roundColIdx).setValue(`Round ${countRounds}`);
 
-  dailyRows.forEach(r => {
-    const rows = sh.getDataRange().getValues();
-    let rowIdx = rows.findIndex(x => x[2] === r.sail);
-
-    if (rowIdx === -1) {
-      const newRow = Array(headers.length).fill('');
-      newRow[1] = r.name;
-      newRow[2] = r.sail;
-      newRow[roundCol-1] = r.scored.net;
-      sh.appendRow(newRow);
-    } else {
-      sh.getRange(rowIdx+1, roundCol).setValue(r.scored.net);
-    }
-  });
-
-  recalcSeries(sh);
+  // 4. Apply All Formatting
+  applyOverallFormatting(sh, memberData.length, roundColIdx);
 }
+

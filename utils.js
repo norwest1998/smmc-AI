@@ -1,45 +1,34 @@
-/* utils.gs - helper utilities shared across modules */
-
-/**
- * Finds the value corresponding to a label in a key:value sheet format.
- * Expects label in column A and value in column B.
- */
-function findLabelValue(values, label) {
-    const searchLabel = (label || '').toLowerCase();
-    for (let r = 0; r < values.length; r++) {
-        const row = values[r];
-        const cellValue = (row[0] || '').toString().trim().replace(':', '').toLowerCase();
-        if (cellValue.includes(searchLabel)) {
-            return (row[1] || '').toString().trim();
-        }
-    }
-    return null;
+/** Utility helpers */
+function formatDate(d){
+return d ? Utilities.formatDate(new Date(d), Session.getScriptTimeZone(), 'dd/MM/yyyy') : '';
 }
 
-/**
- * Tries to normalize a date string into a Date object or standard string.
- */
 function tryNormalizeDate(dateRaw) {
     if (!dateRaw) return null;
-    // Simple attempt to convert if it's not already a Date object
+
+    // 1. Convert the raw string into a Date object.
     const date = new Date(dateRaw);
-    if (!isNaN(date)) {
-        // You might want a specific format here, e.g., 'YYYY-MM-DD'
-        return date.toISOString().split('T')[0]; 
+
+    if (!isNaN(date.getTime())) {
+        // We do NOT use UTC methods like getUTCMonth() or toISOString() 
+        // to ensure we keep the local date (Nov 08, not Nov 07).
+
+        // Get the local day, month, and year.
+        const year = date.getFullYear();
+        // Month is 0-indexed (0 = Jan, 10 = Nov), so add 1
+        const month = date.getMonth() + 1; 
+        const day = date.getDate();
+
+        // Helper function to pad single-digit numbers with a leading zero.
+        const pad = (num) => String(num).padStart(2, '0');
+
+        // Format and return as MM/DD/YYYY
+        // Note: The original code also had a call to formatDate(date), 
+        // which has been removed as it's not defined and likely unnecessary
+        // with the new formatting logic.
+        return `${pad(day)}/${pad(month)}/${year}`;
     }
-    return dateRaw; // Return raw string if normalization fails
-}
 
-// copy of aiParseSpreadsheet from earlier single-file but minimal — place here for completeness if you want Gemini fallback
-function aiParseSpreadsheet(ss, file, geminiApiKey) {
-  // keep as earlier implementation if needed; omitted here for brevity — use the aiParseSpreadsheet from prior script if desired
-  return null;
-}
-
-function setConfigValue(key, value) {
-  PropertiesService.getScriptProperties().setProperty(key, value);
-}
-
-function getConfigValue(key) {
-  return PropertiesService.getScriptProperties().getProperty(key);
+    // Return raw string if normalization fails
+    return dateRaw; 
 }

@@ -1,99 +1,92 @@
-/* main.gs
- * Orchestrator: watches Drive folder, for each new sheet parse, score, write, and post.
- */
-
+/**
+* Orchestrator: scan upload folder for new files, parse, score, write and post
+*/
 function processNewRegattaSheets() {
-const cfg = getConfig();
-const uploadFolderId = cfg.raceUploadFolderId;
-if (!uploadFolderId) throw new Error('Upload folder id not configured.');
-const folder = DriveApp.getFolderById(uploadFolderId);
-const files = folder.getFiles();
+  // get config data
+  const cfg = getConfig();
+  const fbPageId = cfg.fbPageId;
+  const fbToken = cfg.fbToken;
+  const uploadFolderId = cfg.raceUploadFolderId;
+  if (!uploadFolderId) throw new Error('Upload folder id not configured.');
+  
+  const folder = DriveApp.getFolderById(uploadFolderId);
+  const files = folder.getFiles();
 
+  const md = getMasterData();
 
-const masterData = loadMasterData();
-const fbPageId = cfg.fbPageId;
-const fbToken = cfg.fbToken;
+  while (files.hasNext()) {
+    const file = files.next();
+    if (file.getMimeType() !== MimeType.GOOGLE_SHEETS) continue;
+    if ((file.getDescription()||'').indexOf('Processed by SMMC Admin AI') !== -1) continue;
 
-
-while (files.hasNext()) {
-  const file = files.next();
-  if (file.getMimeType() !== MimeType.GOOGLE_SHEETS) continue;
-  if ((file.getDescription()||'').indexOf('Processed by SMMC Admin AI') !== -1) continue;
-
-  try {
-    const sourceFileId = file.getId();          // ✅ THIS was missing
-    const ss = SpreadsheetApp.openById(sourceFileId);
+    //try {
+      const sourceFileId = file.getId();                 // ✅ THIS was missing
+      const ss = SpreadsheetApp.openById(sourceFileId);
     
-    let parsed = parseSimplifiedRegattaSheet(ss);
-    if (!parsed) {
-      Logger.log('Parse failed for ' + file.getName());
-      file.setDescription((file.getDescription()||'') + ' | PARSE_FAILED');
-      continue;
-    }
+      // 1. Parse the new sheet/file (returns raw data with sail numbers)
+      const parsed = parseSimplifiedRegattaSheet(ss); 
+      let currentClassData = md.classMembersMap[parsed.className];
 
-    // Map sail numbers to members using ClassMembers for the parsed class
-    parsed = mapSailNumbersToMembers(parsed, masterData);
+      // 2. Build scores
+      const scoresMap = buildScoresFromRaces(parsed, currentClassData);
+      let rankedScoresMap = rankScoresMap(scoresMap);
 
-    // Compute scores
-    const scoresMap = buildScoresFromRaces(parsed, masterData);
+      // 3. Get or Create the Overall Results Sheet, scoping by Regatta Name
+      const overallSheetID = getOrCreateOverall(parsed.regattaName, parsed, currentClassData); 
 
-    // Write overall results
-    writeOverallResults(parsed, scoresMap, masterData);
+      // 4. Create the round sheet
+      roundWrite(overallSheetID, rankedScoresMap, parsed);
 
-    // Post to Facebook
-    if (fbPageId && fbToken) postResultsAsImagePNG(parsed, scoresMap, masterData, fbPageId, fbToken);
+      // 5. Add round to the Overall sheet (and trigger series recalc)
+      appendRound(overallSheetID, parsed, rankedScoresMap);;
 
-      finalizeRaceResultsFile(
-        sourceFileId,  // ← IMPORTANT: capture this earlier
-        parsed
-        );
+      // 6. Post the results image to Facebook
+      // postResultsAsImagePNG(parsed, rankedScoresMap, overallSheetID, fbPageId, fbToken);
 
-      file.setDescription((file.getDescription()||'') + ' - Processed by SMMC Admin AI');
+      // 7. Mark the file as processed
+      // finalizeRaceResultsFile(file, parsed);
 
-    } 
-   catch (e) {
-    Logger.log('Processing file ' + file.getName() + ' error: ' + e);
-    file.setDescription((file.getDescription()||'') + ' | PROCESS_ERROR');
-   }
-
-  }
+    //} 
+    //  catch (e) {
+    //  Logger.log(`ERROR processing file ${file.getName()}: ${e.message}`);
+    //}
+  };
 }
+
 
 /**
  * Rename and move processed race results file
  */
-function finalizeRaceResultsFile(sourceFileId, parsed) {
-
-  if (!sourceFileId || typeof sourceFileId !== 'string') {
-    throw new Error('finalizeRaceResultsFile: sourceFileId is invalid');
-  }
-
-  const file = DriveApp.getFileById(sourceFileId);
-
-  const regattaName = parsed.regattaName || 'Regatta';
-  const date = parsed.date || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-
-  const newName = `${regattaName} - ${date}`;
-
-  // Rename file
-  file.setName(newName);
-
-  // ---- Move to Processed folder ----
+function finalizeRaceResultsFile(file, parsed) {
   const cfg = getConfig();
-  const processedFolderId = cfg.raceResultsProcessedFolderId;
-  if (!processedFolderId) {
-    throw new Error('raceResultsProcessedFolderId not set in config');
+  const archiveFolderId = cfg.resultsProcessedFolderId;
+  if (!archiveFolderId) {
+    Logger.log('ERROR: raceResultsProcessedFolderId is not configured. File move skipped.');
+    return; // Stop if the configuration is missing
   }
+  const archiveFolder = DriveApp.getFolderById(archiveFolderId); 
+  // -------------------------------------------------------------------
+  
+  const regatta = parsed.regattaName;
+  let dateStr = tryNormalizeDate(parsed.date);
 
-  const processedFolder = DriveApp.getFolderById(processedFolderId);
-
-  // Remove from parent folders
-  const parents = file.getParents();
-  while (parents.hasNext()) {
-    parents.next().removeFile(file);
+  // 1. Update the file description to prevent re-processing
+  const newDescription = `PROCESSED: ${regatta} results for ${dateStr}.`;
+  try {
+    file.setDescription(newDescription);
+    Logger.log(`File description updated for processing flag: ${file.getName()}`);
+  } catch (e) {
+    Logger.log(`WARNING: Failed to update file description for ${file.getName()}. Error: ${e.message}`);
   }
-
-  processedFolder.addFile(file);
-
-  Logger.log(`Race results file finalised: ${newName}`);
+  
+  // 2. Rename and Archive
+  try {
+    // Move the file to the archive folder
+    const newFile = file.moveTo(archiveFolder);
+    
+    Logger.log(`File archived successfully: ${newFile.getName()} moved to ${archiveFolder.getName()}`);
+  } catch (e) {
+    Logger.log(`ERROR: FAILED to archive file ${file.getName()}. It is marked PROCESSED but remains in the input folder. Error: ${e.message}`);
+    // The file is marked PROCESSED, so the orchestrator can ignore it next time.
+  }
 }

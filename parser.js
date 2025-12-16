@@ -1,9 +1,8 @@
-/* parser.gs
- * Parse the regatta sheet (Position rows, Race columns) and transpose the data
- * into a structure where Sail Number is the primary key (Row) and the value
- * is an array of finishing positions (Columns = Races).
- */
-
+/**
+* Parse an uploaded Race Results sheet and return structured object
+* Expected layout (example provided by user): header rows with Regatta Name, Class, Date
+* followed by a table where first column is Position and subsequent columns are R1..Rn.
+*/
 function parseSimplifiedRegattaSheet(ss) {
   const sheet = ss.getSheets()[0];
   const lastRow = sheet.getLastRow();
@@ -13,11 +12,17 @@ function parseSimplifiedRegattaSheet(ss) {
   const values = sheet.getRange(1, 1, lastRow || 10, lastCol || 5).getValues();
 
   // --- Header Parsing ---
+  const eventID = sheet.getRange(1,1).getValue();
   const regattaName = findLabelValue(values, 'Regatta Name') || findLabelValue(values, 'Regatta') || null;
   const className = findLabelValue(values, 'Class') || null;
   const dateRaw = findLabelValue(values, 'Date') || null;
   const date = tryNormalizeDate(dateRaw);
-  const raceReport = sheet.getRange(5,5).getValue();
+  const competitorCount = findLabelValue(values, 'Boat Count');
+  let raceReport = findLabelValue(values, 'Race Report');
+
+  if(!raceReport) {
+    raceReport = `Race results for ${regattaName} sailed on the ${date}`;
+  }
 
   // --- Find Table Header Row ---
   let tableHeaderRow = -1;
@@ -74,49 +79,12 @@ function parseSimplifiedRegattaSheet(ss) {
   }));
 
   return {
+    eventID,
     regattaName,
     className,
     date,
-    races: racesTransposed,
-    raceReport
+    competitorCount,
+    raceReport,
+    races: racesTransposed
   };
 }
-
-
-/**
- * Validates sail numbers against a master data list, using the new structure.
- */
-function mapSailNumbersToMembers(parsed, masterData) {
-  const classEntry = Object.values(masterData.classesById)
-    .find(c => c.classname.toLowerCase() === (parsed.className || '').toLowerCase());
-  if (!classEntry) throw new Error('Class not found: ' + parsed.className);
-  const classname = classEntry.classname;
-
-  // Build array of valid sail numbers as NUMBERS
-  const validSailNumbers = new Set(
-    (masterData.classMembersMap[classname] || [])
-      .map(m => Number(m.sailnumber))
-      .filter(n => !isNaN(n))
-  );
-
-  parsed.races.forEach(entry => {
-    const raw = String(entry.sailNumber || '').trim();
-    if (!raw) return;
-
-    const match = raw.match(/\d+$/);
-    if (!match) {
-      Logger.log(`Warning: Cannot extract number from sail: ${raw}`);
-      return;
-    }
-
-    const num = Number(match[0]);
-    if (!validSailNumbers.has(num)) {
-      Logger.log(`Warning: Sail number ${raw} (using ${num}) not found in class ${parsed.className}`);
-    }
-  });
-
-   return parsed;
-}
-
-
-

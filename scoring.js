@@ -1,36 +1,15 @@
-/* scoring.gs
- * Low-point scoring and discard logic. 1=1pt, 2=2pt... DNF/DNS assigned penalty = competitors+1
- */
-function buildScoresFromRaces(parsed, masterData) {
+/**
+* Scoring routines — low-point system with discards
+*/
+function buildScoresFromRaces(parsed, members) {
 
   /* ---------------------------
-   * Find class & roster
+   * Create roster
    * --------------------------- */
-  const classEntry = Object.values(masterData.classesById)
-    .find(c => c.classname.toLowerCase() === (parsed.className || '').toLowerCase());
+  const classname = parsed.className;
 
-  if (!classEntry)
-    throw new Error('Class not found: ' + parsed.className);
-
-  const classname = classEntry.classname;
-  const classRoster = masterData.classMembersMap[classname] || [];
-
-  if (classRoster.length === 0)
+  if (members.length === 0)
     throw new Error('No competitors for class: ' + classname);
-
-  /* ---------------------------
-   * Initialize scores from roster
-   * --------------------------- */
-  const scores = {};
-  classRoster.forEach(e => {
-    const sail = e.sailnumber.toString().trim();
-    scores[sail] = {
-      sail: sail,
-      member: e.membername,
-      placements: [],
-      gross: 0
-    };
-  });
 
   /* ---------------------------
    * Determine race count
@@ -47,20 +26,46 @@ function buildScoresFromRaces(parsed, masterData) {
   parsed.races.forEach(entry => {
     entry.positions.forEach(p => {
       if (typeof p === 'number' && p > 0) {
-        sailedSet.add(entry.sailNumber.toString().trim());
+        sailedSet.add(entry.sailNumber);
       }
     });
   });
 
-  const regattaCompetitorCount = sailedSet.size;
+  /* ---------------------------
+   * Initialize scores from sailedSet
+   * --------------------------- */
+
+  const memberLookupMap = new Map();
+  for (const member of members) {
+    const sailNumberString = String(member.sailnumber);
+    memberLookupMap.set(sailNumberString, member.membername);
+  }
+
+  const scores = []; 
+  sailedSet.forEach(sailNumber => {      
+    // Look up the member in the map name using the sailNumber from the Set
+    const memberName = memberLookupMap.get(sailNumber);
+   
+    // Set the member field. If memberName is found, use it; otherwise, use an empty string.
+    const finalMemberValue = memberName || ""; 
+
+    scores.push({
+      sail: sailNumber,
+      member: finalMemberValue, // Populated value
+      placements: [],
+      racescore: [],
+      gross: 0
+    });
+  });
+
 
   /* ---------------------------
    * Penalty values
    * --------------------------- */
   const PENALTIES = {
-    DNS: regattaCompetitorCount + 1,
-    DNF: regattaCompetitorCount + 1,
-    DNC: regattaCompetitorCount + 1
+    DNS: +parsed.competitorCount + 1,
+    DNF: +parsed.competitorCount + 1,
+    DNC: +parsed.competitorCount + 1
   };
 
   /* ---------------------------
@@ -89,7 +94,6 @@ function buildScoresFromRaces(parsed, masterData) {
   Object.values(scores).forEach(sc => {
     const sail = sc.sail;
     const entry = parsed.races.find(r => r.sailNumber.toString().trim() === sail);
-    const participated = sailedSet.has(sail);
 
     for (let r = 0; r < raceCount; r++) {
       const val = entry?.positions?.[r];
@@ -107,18 +111,10 @@ function buildScoresFromRaces(parsed, masterData) {
         placement = 'RO';
         scoreVal = raceAverages[r];
 
-      } else if (!participated) {
-        // Never raced in regatta
-        placement = 'DNC';
-        scoreVal = PENALTIES.DNC;
+      } 
 
-      } else {
-        // Raced at least once, but missed this race
-        placement = 'DNS';
-        scoreVal = PENALTIES.DNS;
-      }
-
-      sc.placements[r] = placement;
+      sc.placements[r] = placement
+      sc.racescore[r] = scoreVal;
       sc.gross += scoreVal;
     }
   });
@@ -126,103 +122,33 @@ function buildScoresFromRaces(parsed, masterData) {
   /* ---------------------------
    * Discards & totals
    * --------------------------- */
-  const discardCount = determineDiscardCount(raceCount);
+  const discardCount = getDiscardCount(raceCount);
 
-  Object.values(scores).forEach(sc => {
-    const numeric = sc.placements.map(p =>
-      typeof p === 'number' ? p : PENALTIES.DNC
-    );
+  scores.forEach(sc => {
+    // 1. Map scores to objects so we can track their original index after sorting
+    const indexedScores = sc.racescore.map((score, index) => ({
+      score: score,
+      index: index
+    }));
 
-    const discardsSum = numeric
-      .slice()
-      .sort((a, b) => b - a)
-      .slice(0, discardCount)
-      .reduce((a, b) => a + b, 0);
+    // 2. Sort by score descending (highest scores first are the candidates for discard)
+    indexedScores.sort((a, b) => b.score - a.score);
 
-    sc.discards = discardsSum;
-    sc.total = sc.gross - discardsSum;
-    sc.raceCount = raceCount;
-    sc.regattaCompetitors = regattaCompetitorCount;
+    // 3. Initialize the discards array with 'false' for all races
+    sc.discards = new Array(raceCount).fill(false);
+    let discardedSum = 0;
+
+    // 4. Mark the top N scores as discarded
+    for (let i = 0; i < discardCount; i++) {
+      const discardIndex = indexedScores[i].index;
+      sc.discards[discardIndex] = true; // Mark this specific race as a discard
+      discardedSum += indexedScores[i].score;
+    }
+
+    // 5. Calculate net total
+    sc.net = sc.gross - discardedSum;
   });
 
-return applyTieBreaksWithExAequo(scores);
-
-}
-
-function determineDiscardCount(raceCount){
-  if(!raceCount || raceCount<4) return 0;
-  return 1 + Math.floor(raceCount / 8);
-}
-
-function compareWithTieBreak(a, b, penalty) {
-
-  // Total
-  if (a.total !== b.total) {
-    return a.total - b.total;
-  }
-
-  // A8.1: sorted scores
-  const aScores = normalizePlacements(a.placements, penalty).slice().sort((x,y)=>x-y);
-  const bScores = normalizePlacements(b.placements, penalty).slice().sort((x,y)=>x-y);
-
-  for (let i = 0; i < aScores.length; i++) {
-    if (aScores[i] !== bScores[i]) {
-      return aScores[i] - bScores[i];
-    }
-  }
-
-  // A8.2: last race backwards
-  for (let r = a.placements.length - 1; r >= 0; r--) {
-    const av = typeof a.placements[r] === 'number' ? a.placements[r] : penalty;
-    const bv = typeof b.placements[r] === 'number' ? b.placements[r] : penalty;
-    if (av !== bv) return av - bv;
-  }
-
-  // Fully tied
-  return 0;
-}
-
-function normalizePlacements(placements, penalty) {
-  return placements.map(p =>
-    typeof p === 'number' ? p : penalty
-  );
-}
-
-function applyTieBreaksWithExAequo(scoresMap) {
-
-  const list = Object.values(scoresMap);
-  const penalty = list[0].regattaCompetitors + 1;
-
-  // Sort using full tie-break logic
-  list.sort((a,b) => compareWithTieBreak(a, b, penalty));
-
-  let place = 1;
-  let i = 0;
-
-  while (i < list.length) {
-    let tiedGroup = [list[i]];
-    let j = i + 1;
-
-    // Find all boats fully tied with this one
-    while (
-      j < list.length &&
-      compareWithTieBreak(list[i], list[j], penalty) === 0
-    ) {
-      tiedGroup.push(list[j]);
-      j++;
-    }
-
-    // Assign placings
-    if (tiedGroup.length === 1) {
-      tiedGroup[0].place = place;
-    } else {
-      tiedGroup.forEach(b => b.place = `${place}=`);
-    }
-
-    place += tiedGroup.length;
-    i = j;
-  }
-
-  return list;
+  return scores;
 }
 
