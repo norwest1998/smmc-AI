@@ -45,8 +45,10 @@ function overallSetup(bookID, parsed, members) {
   let sh = ss.getSheetByName("Overall Results") || ss.insertSheet("Overall Results", 0);
 
   // Setup Metadata Labels
-  sh.getRange("B2:C2").merge().setValue("Last Race : " + parsed.date);
-  sh.getRange("B3:C3").merge().setValue("Rounds : 0");
+  sh.getRange("B2:C2").merge().setValue("Last Race :");
+  sh.getRange("D2").setValue(parsed.date);
+  sh.getRange("B3:C3").merge().setValue("Rounds :");
+  sh.getRange("B3:C3").setValue(0);
   sh.getRange("F2").setValue("DNC").setHorizontalAlignment("right");
 
   // Headers
