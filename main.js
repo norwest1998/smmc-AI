@@ -37,7 +37,7 @@ function processNewRegattaSheets() {
       const ss = SpreadsheetApp.openById(sourceFileId);
     
       // 1. Parse the new sheet/file (returns raw data with sail numbers)
-      const parsed = parseSimplifiedRegattaSheet(ss); 
+      parsed = parseSimplifiedRegattaSheet(ss); 
       let currentClassData = md.classMembersMap[parsed.className];
 
       // 2. Build scores
