@@ -105,6 +105,22 @@ function findHeader_(headers, candidates) {
   return -1;
 }
 
+/**
+ * Coerces a cell value into clean text. Cells holding an in-cell image come
+ * back from getValues() as CellImage objects whose String() is "CellImage" -
+ * those (and other rich objects/dates) are treated as empty.
+ */
+function sanitizeCell_(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (value instanceof Date) return '';
+  var s = '';
+  try { s = String(value); } catch (err) { s = ''; }
+  if (/^cellimage$/i.test(s)) return '';
+  return s.trim();
+}
+
 // ============================== LATEST RESULTS ================================
 
 /**
@@ -132,25 +148,43 @@ function getLatestResults() {
   if (!row) throw new Error('No events marked "Processed" were found in Event Data.');
 
   var raceDate = (row[2] instanceof Date) ? row[2] : new Date(row[2]);
-  var cls = String(row[5]).trim();   // F Class
-  var type = String(row[6]).trim();  // G Regatta Type
-  var champName = row.length > 8 ? String(row[8]).trim() : ''; // I optional championship name
+  var cls = sanitizeCell_(row[5]);    // F Class (may hold an in-cell image)
+  var type = sanitizeCell_(row[6]);   // G Regatta Type
+  var champName = row.length > 8 ? sanitizeCell_(row[8]) : ''; // I championship name
   var tz = Session.getScriptTimeZone();
 
+  // Season lives in SMMC Club Management's named ranges (fallback: calendar).
   var season = '';
   try {
-    var namedRange = cal.getRangeByName('currentSeason');
-    if (namedRange) season = String(namedRange.getValue()).trim();
-  } catch (err) { /* season stays blank */ }
+    var club = openSpreadsheet_(HPAPI_CFG.clubManagementId, HPAPI_CFG.clubManagementName);
+    var namedRange = club.getRangeByName('currentSeason');
+    if (namedRange) season = sanitizeCell_(namedRange.getValue());
+  } catch (err) { /* try the calendar below */ }
+  if (!season) {
+    try {
+      var calRange = cal.getRangeByName('currentSeason');
+      if (calRange) season = sanitizeCell_(calRange.getValue());
+    } catch (err) { /* season stays blank */ }
+  }
 
-  var workbook = findOverallWorkbook_(cls, type, season);
+  var workbook = findOverallWorkbook_(cls, type, season, champName);
   var round = resolveLastRound_(workbook);
+
+  // Prefer the championship name, then the workbook's series name
+  // ("Overall Results <series> <season>" -> "<series>"), then class/type.
+  var seriesName = champName;
+  if (!seriesName) {
+    seriesName = workbook.getName().replace(/^Overall Results\s*/i, '').trim();
+    if (season) seriesName = seriesName.split(season).join('').trim();
+  }
+  if (!seriesName) seriesName = (cls + ' ' + type).trim();
+  if (!seriesName) seriesName = 'Latest Round';
 
   return {
     ok: true,
     event: {
       roundLabel: round.label,
-      championship: champName || ((cls + ' ' + type).trim()),
+      championship: seriesName,
       racedOn: Utilities.formatDate(raceDate, tz, 'd MMM'),
       className: cls,
       regattaType: type,
@@ -163,14 +197,21 @@ function getLatestResults() {
 
 /**
  * Finds the Overall Results workbook for a class / regatta type / season.
- * Order: cached script property -> exact name in folder -> fuzzy folder match.
+ * Order: cached script property -> exact name in folder -> scored fuzzy match.
+ * The championship name (Event Data column I) is tried first because workbooks
+ * are named "Overall Results <regattaName> <season>". Empty tokens always
+ * match, so a Class cell holding an in-cell image doesn't break the search.
  */
-function findOverallWorkbook_(cls, type, season) {
+function findOverallWorkbook_(cls, type, season, champName) {
   var candidates = [];
-  if (season) {
-    candidates.push(('Overall Results ' + cls + ' ' + type + ' ' + season).replace(/\s+/g, ' ').trim());
+  if (champName) {
+    if (season) candidates.push(('Overall Results ' + champName + ' ' + season).replace(/\s+/g, ' ').trim());
+    candidates.push(('Overall Results ' + champName).replace(/\s+/g, ' ').trim());
   }
-  candidates.push(('Overall Results ' + cls + ' ' + type).replace(/\s+/g, ' ').trim());
+  if (cls || type) {
+    if (season) candidates.push(('Overall Results ' + cls + ' ' + type + ' ' + season).replace(/\s+/g, ' ').trim());
+    candidates.push(('Overall Results ' + cls + ' ' + type).replace(/\s+/g, ' ').trim());
+  }
 
   // 1. Cached property (set by Race Results Automation when it creates workbooks)
   var props = PropertiesService.getScriptProperties();
@@ -181,9 +222,10 @@ function findOverallWorkbook_(cls, type, season) {
     }
   }
 
-  // 2. Exact then fuzzy match inside the Overall Results Sheets folder
+  // 2. Exact then scored fuzzy match inside the Overall Results Sheets folder.
   var folders = DriveApp.getFoldersByName(HPAPI_CFG.overallFolderName);
   var fuzzy = null;
+  var fuzzyScore = -1;
   while (folders.hasNext()) {
     var files = folders.next().getFilesByType(MimeType.GOOGLE_SHEETS);
     while (files.hasNext()) {
@@ -192,14 +234,15 @@ function findOverallWorkbook_(cls, type, season) {
       for (var c = 0; c < candidates.length; c++) {
         if (name === candidates[c]) return SpreadsheetApp.openById(file.getId());
       }
-      if (!fuzzy && name.indexOf(cls) !== -1 &&
-          (type === '' || name.toLowerCase().indexOf(type.toLowerCase()) !== -1) &&
-          (season === '' || name.indexOf(season) !== -1)) {
-        fuzzy = file;
-      }
+      var score = 0, ok = true;
+      if (champName && name.indexOf(champName) !== -1) score += 4;
+      if (cls) { if (name.indexOf(cls) !== -1) score += 2; else ok = false; }
+      if (type) { if (name.toLowerCase().indexOf(type.toLowerCase()) !== -1) score += 1; else ok = false; }
+      if (season) { if (name.indexOf(season) !== -1) score += 1; else ok = false; }
+      if (ok && score > fuzzyScore) { fuzzy = file; fuzzyScore = score; }
     }
   }
-  if (fuzzy) return SpreadsheetApp.openById(fuzzy.getId());
+  if (fuzzy && fuzzyScore > 0) return SpreadsheetApp.openById(fuzzy.getId());
 
   // 3. Last resort - search Drive broadly for the class name.
   if (cls) {
@@ -216,13 +259,17 @@ function findOverallWorkbook_(cls, type, season) {
     }
   }
 
-  throw new Error('No Overall Results workbook found for ' + cls + ' ' + type + ' ' + season);
+  throw new Error('No Overall Results workbook found. Searched: "' +
+      candidates.join('" / "') + '" in folder "' + HPAPI_CFG.overallFolderName +
+      '" [Class="' + cls + '", Type="' + type + '", Season="' + season +
+      '", Championship="' + champName + '"]');
 }
 
 /**
  * Locates the last round in an Overall Results workbook.
  * Prefers a dedicated "Round N" sheet; falls back to the right-most
- * "Round N" column group on the "Overall Results" sheet.
+ * "Round N" column on the "Overall Results" sheet (appendRound layout:
+ * label row 4, member names col C, sail col B, net scores rows 5+).
  */
 function resolveLastRound_(workbook) {
   // 1. Dedicated "Round N" sheets
@@ -241,7 +288,7 @@ function resolveLastRound_(workbook) {
 
   // 2. "Overall Results" sheet with rounds as columns ("Round N" headers)
   var overall = workbook.getSheetByName(HPAPI_CFG.overallSheetName);
-  if (overall) return { label: findLastColumnRound_(overall), results: [] };
+  if (overall) return parseOverallRoundColumn_(overall);
 
   throw new Error('No round sheets found in "' + workbook.getName() + '".');
 }
@@ -255,10 +302,11 @@ function parseResultsTable_(sheet) {
   if (!values.length) return [];
 
   // Find the header row: first row containing both a position-ish and a name-ish cell.
+  // Round sheets (roundWrite) use: Pos | Sail # | Competitor | Result | R1..Rn | ...
   var headerRow = -1, posCol = -1, nameCol = -1;
   for (var r = 0; r < Math.min(values.length, 10); r++) {
     var p = findHeader_(values[r], ['pos', 'position', 'rank', 'place', 'result']);
-    var nm = findHeader_(values[r], ['name', 'sailor', 'membername', 'helmsman', 'skipper']);
+    var nm = findHeader_(values[r], ['competitor', 'name', 'sailor', 'membername', 'membername', 'helmsman', 'skipper']);
     if (p !== -1 && nm !== -1) { headerRow = r; posCol = p; nameCol = nm; break; }
   }
   if (headerRow === -1) return []; // unrecognised layout
@@ -269,15 +317,16 @@ function parseResultsTable_(sheet) {
   var rows = [];
   for (var i = headerRow + 1; i < values.length; i++) {
     var rowVals = values[i];
-    var sailor = nameCol >= 0 ? rowVals[nameCol].trim() : '';
-    var sail = sailCol >= 0 ? rowVals[sailCol].trim() : '';
+    var cell = function (col) { return col >= 0 ? String(rowVals[col]).trim() : ''; };
+    var sailor = cell(nameCol);
+    var sail = cell(sailCol);
     if (!sailor && !sail) continue;
 
-    var posRaw = posCol >= 0 ? rowVals[posCol].trim() : '';
+    var posRaw = cell(posCol);
     var posNum = parseInt(posRaw.replace(/[^\d]/g, ''), 10);
     if (isNaN(posNum)) posNum = 9999 + rows.length;
 
-    var cls = classCol >= 0 ? rowVals[classCol].trim() : '';
+    var cls = cell(classCol);
     rows.push({
       sortPos: posNum,
       pos: posNum,
@@ -291,20 +340,69 @@ function parseResultsTable_(sheet) {
   return rows;
 }
 
-/** Finds the right-most "Round N" label on the Overall sheet (for the label only). */
-function findLastColumnRound_(overall) {
-  var lastCol = overall.getLastColumn();
-  var lastRow = Math.min(overall.getLastRow(), 15);
-  if (lastCol < 1 || lastRow < 1) return 'Latest Round';
-  var headers = overall.getRange(1, 1, lastRow, lastCol).getDisplayValues();
-  var bestN = 0;
+/**
+ * Extracts the latest round from the "Overall Results" sheet where rounds are
+ * columns (appendRound): the "Round N" label sits in row 4 of the round
+ * column, member names in column C, sail numbers in column B, and each
+ * member's net score for the round in rows 5+. Results are ranked by
+ * ascending score (lowest net points first).
+ */
+function parseOverallRoundColumn_(sheet) {
+  var lastCol = sheet.getLastColumn();
+  var lastRow = sheet.getLastRow();
+  if (lastCol < 1 || lastRow < 5) return { label: 'Latest Round', results: [] };
+
+  // Scan the top rows for "Round N" labels; keep the right-most column.
+  var top = sheet.getRange(1, 1, Math.min(lastRow, 6), lastCol).getDisplayValues();
+  var bestCol = -1, bestN = 0;
   for (var c = 0; c < lastCol; c++) {
-    for (var r = 0; r < lastRow; r++) {
-      var m = String(headers[r][c]).trim().match(/^Round\s*(\d+)$/i);
-      if (m) bestN = Math.max(bestN, parseInt(m[1], 10));
+    for (var r = 0; r < top.length; r++) {
+      var m = String(top[r][c]).trim().match(/^Round\s*(\d+)$/i);
+      if (m) {
+        var n = parseInt(m[1], 10);
+        if (n > bestN) { bestN = n; bestCol = c; }
+        break;
+      }
     }
   }
-  return bestN ? 'Round ' + bestN : 'Latest Round';
+  if (bestCol === -1) return { label: 'Latest Round', results: [] };
+
+  // Locate the member header row (overallSetup puts it on row 4).
+  var headerRowIdx = 3, nameCol = 2, sailCol = 1; // sensible defaults for the layout
+  for (var hr = 0; hr < top.length; hr++) {
+    var nm = findHeader_(top[hr], ['membername', 'competitor', 'name', 'sailor']);
+    if (nm !== -1) {
+      headerRowIdx = hr;
+      nameCol = nm;
+      var sc = findHeader_(top[hr], ['sail#', 'sailno', 'sailnumber', 'sail']);
+      if (sc !== -1) sailCol = sc;
+      break;
+    }
+  }
+
+  var startRow = headerRowIdx + 2; // headerRowIdx is 0-based: sheet row = idx+1, members start the next row
+  var rowCount = lastRow - startRow + 1;
+  if (rowCount < 1) return { label: 'Round ' + bestN, results: [] };
+
+  var scoreVals = sheet.getRange(startRow, bestCol + 1, rowCount, 1).getDisplayValues();
+  var nameVals = sheet.getRange(startRow, nameCol + 1, rowCount, 1).getDisplayValues();
+  var sailVals = sheet.getRange(startRow, sailCol + 1, rowCount, 1).getDisplayValues();
+
+  var rows = [];
+  for (var i = 0; i < rowCount; i++) {
+    var sailor = String(nameVals[i][0]).trim();
+    var sail = String(sailVals[i][0]).trim();
+    if (!sailor && !sail) continue;
+    var score = parseFloat(String(scoreVals[i][0]).replace(/[^\d.\-]/g, ''));
+    if (isNaN(score)) continue; // no result recorded for this member
+    rows.push({ score: score, sailor: sailor, sailNo: sail });
+  }
+
+  rows.sort(function (a, b) { return a.score - b.score; });
+  var results = rows.map(function (r, idx) {
+    return { pos: idx + 1, sailor: r.sailor, sailNo: r.sailNo };
+  });
+  return { label: 'Round ' + bestN, results: results };
 }
 
 // ============================ MEMBERSHIP STATISTICS ===========================
