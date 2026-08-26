@@ -62,6 +62,9 @@ function doGet(e) {
 
     // Legacy discovery contract (Championship Standings module)
     if (params.ss) {
+      if (!/^[A-Za-z0-9_-]{10,}$/.test(params.ss)) {
+        return json_({ error: 'Parameter "ss" must be a valid spreadsheet ID.' });
+      }
       var ss = SpreadsheetApp.openById(params.ss);
       if (params.sheet) return json_(serveSheet_(ss, params.sheet));
       return json_({ sheets: ss.getSheets().map(function (s) {
@@ -199,15 +202,17 @@ function findOverallWorkbook_(cls, type, season) {
   if (fuzzy) return SpreadsheetApp.openById(fuzzy.getId());
 
   // 3. Last resort - search Drive broadly for the class name.
-  var hits = DriveApp.searchFiles('mimeType = "' + MimeType.GOOGLE_SHEETS +
-      '" and title contains "' + cls.replace(/"/g, '') + '"');
-  while (hits.hasNext()) {
-    var hit = hits.next();
-    var n = hit.getName();
-    if (n.indexOf('Overall Results') === 0 &&
-        (type === '' || n.toLowerCase().indexOf(type.toLowerCase()) !== -1) &&
-        (season === '' || n.indexOf(season) !== -1)) {
-      return SpreadsheetApp.openById(hit.getId());
+  if (cls) {
+    var hits = DriveApp.searchFiles('mimeType = "' + MimeType.GOOGLE_SHEETS +
+        '" and title contains "' + cls.replace(/"/g, '') + '"');
+    while (hits.hasNext()) {
+      var hit = hits.next();
+      var n = hit.getName();
+      if (n.indexOf('Overall Results') === 0 &&
+          (type === '' || n.toLowerCase().indexOf(type.toLowerCase()) !== -1) &&
+          (season === '' || n.indexOf(season) !== -1)) {
+        return SpreadsheetApp.openById(hit.getId());
+      }
     }
   }
 

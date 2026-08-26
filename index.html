@@ -996,13 +996,19 @@
 
   /* =========================================================================
      LATEST RESULTS + MEMBERSHIP STATISTICS
-     Served by the "HomePage Data API" Apps Script web app. Paste its /exec
-     deployment URL into HOME_DATA_API below. When left empty the existing
-     DISCOVERY_URL is used - the Data API is fully backward compatible with
-     the discovery contract, so redeploying it over that project also works.
+     These two sections are served by the "HomePage Data API" Apps Script web
+     app (source: "HomePage Data API gs").
+
+     >>> REQUIRED: paste the Data API's /exec deployment URL below. <<<
+     Unlike the Championship Standings module, they do NOT fall back to
+     DISCOVERY_URL - the old discovery app does not implement these actions.
      ========================================================================= */
   const HOME_DATA_API = "";
-  const DATA_API_BASE = HOME_DATA_API || DISCOVERY_URL;
+  const DATA_API_BASE = HOME_DATA_API;
+
+  function apiConfigured(){
+    return typeof HOME_DATA_API === 'string' && HOME_DATA_API.trim() !== '';
+  }
 
   async function apiGet(params){
     const qs = new URLSearchParams(params).toString();
@@ -1039,6 +1045,14 @@
   async function loadLatestResults(){
     const metaEl = document.getElementById('latestResultsMeta');
     const ribbonEl = document.getElementById('resultsRibbon');
+    if (!apiConfigured()) {
+      metaEl.textContent = 'Not configured';
+      ribbonEl.innerHTML =
+        '<div class="finish-chip glass"><div class="pos">–</div>' +
+        '<div class="sailor">Set HOME_DATA_API to the deployed "HomePage Data API" URL</div>' +
+        '<div class="sail-no">&nbsp;</div></div>';
+      return;
+    }
     try {
       const data = await apiGet({ action: 'latestResults' });
       metaEl.textContent =
@@ -1105,6 +1119,12 @@
   }
 
   async function loadMembershipStats(){
+    if (!apiConfigured()) {
+      ['members', 'applications', 'boats', 'financial'].forEach(t => setCard(t, '—', 'Not configured'));
+      document.getElementById('statusBreakdown').innerHTML =
+        '<div class="breakdown-title">Set HOME_DATA_API to the deployed "HomePage Data API" URL</div>';
+      return;
+    }
     try {
       membershipData = await apiGet({ action: 'membershipStats' });
       renderStatCards();
