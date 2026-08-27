@@ -1,6 +1,6 @@
-========================================
-FILE: appsscript.html
-========================================
+//======================================
+// FILE: appsscript.html
+//======================================
 
 {
   "timeZone": "Australia/Sydney",
@@ -10,9 +10,9 @@ FILE: appsscript.html
   "runtimeVersion": "V8"
 }
 
-========================================
-FILE: Code.gs
-========================================
+//======================================
+// FILE: Code.gs
+//======================================
 
 // --- CONFIGURATION: SMMC CLUB MANAGEMENT ---
 const CLUB_MANAGEMENT_SPREADSHEET_ID = "1nFqeV1U0c_RLaZK4amf7QR1MMwB9q8gZLc4HriUH9iI";

@@ -1,6 +1,6 @@
-========================================
-FILE: appsscript.html
-========================================
+//======================================
+// FILE: appsscript.html
+//======================================
 
 {
   "timeZone": "Australia/Sydney",
@@ -10,9 +10,9 @@ FILE: appsscript.html
   "runtimeVersion": "V8"
 }
 
-========================================
-FILE: AI Agent.gs
-========================================
+//======================================
+// FILE: AI Agent.gs
+//======================================
 
 /**
  * Main function: Fetches the latest MP3 race recording from the upload folder,
@@ -58,7 +58,7 @@ function processRaceAudioFromFolder() {
     return;
   }
   
-  Logger.log(`[CHECKPOINT 1] SUCCESS: Processing file: "${latestFile.getName()}" (Size: ${(latestFile.getSize() / 1024 / 1024).toFixed(2)} MB)`);
+  Logger.log(`[CHECKPOINT 1] SUCCESS: Processing // FILE: "${latestFile.getName()}" (Size: ${(latestFile.getSize() / 1024 / 1024).toFixed(2)} MB)`);
   
   // 3. Prepare the binary data payload
   const blob = latestFile.getBlob();

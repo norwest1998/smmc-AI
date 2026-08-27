@@ -2,9 +2,10 @@
  * ============================================================================
  * HOMEPAGE DATA API  (Google Apps Script Web App)
  * ============================================================================
- * Backend for the SMMC HomePage landing site. Deploy as a Web App
- * (Execute as: Me, Access: Anyone) and paste the /exec URL into the
- * HOME_DATA_API constant in the HomePage HTML.
+ * Backend for the SMMC HomePage landing site. This is a STANDALONE Apps Script
+ * project (its own script ID / deployment - see README.md in this folder).
+ * Deploy as a Web App (Execute as: Me, Access: Anyone) and paste the /exec URL
+ * into the HOME_DATA_API constant in the HomePage HTML.
  *
  * ENDPOINTS (GET):
  *   ?action=latestResults
@@ -119,6 +120,48 @@ function sanitizeCell_(value) {
   try { s = String(value); } catch (err) { s = ''; }
   if (/^cellimage$/i.test(s)) return '';
   return s.trim();
+}
+
+// ============================== LEGACY DISCOVERY ==============================
+//
+// Standalone port of the former "Get File Sheets" discovery web app so this
+// script no longer depends on any other project. Contract (unchanged):
+//   ?ss=<id>&sheet=<name> -> {meta, headers, rows}
+// consumed by the Championship Standings module in index.html.
+
+/** Returns one sheet as {meta, headers, rows} using the fixed row layout:
+ *  rows 1-6 race/championship info, row 7 headers, data rows 8+. */
+function serveSheet_(ss, sheetName) {
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) throw new Error('Sheet not found: ' + sheetName);
+
+  var values = sheet.getDataRange().getValues();
+  var tz = ss.getSpreadsheetTimeZone();
+  function fmt(cell) {
+    return (cell instanceof Date) ? Utilities.formatDate(cell, tz, 'yyyy/MM/dd') : cell;
+  }
+
+  // Rows 1-6: race/championship info - collect whatever cells are filled in.
+  var meta = [
+    values[2][1],       // Row 3, Column B
+    fmt(values[2][3]),  // Row 3, Column D
+    values[3][1],
+    values[3][3]        // Row 4, Column D
+  ];
+
+  var headers = values[6]; // row 7 = real column headers
+  var rows = [];
+  for (var r = 7; r < values.length; r++) {
+    var row = values[r];
+    var hasContent = false;
+    for (var c = 0; c < row.length; c++) { if (row[c] !== '') { hasContent = true; break; } }
+    if (!hasContent) continue;
+    var out = [];
+    for (var c2 = 0; c2 < row.length; c2++) out.push(fmt(row[c2]));
+    rows.push(out);
+  }
+
+  return { meta: meta, headers: headers, rows: rows };
 }
 
 // ============================== LATEST RESULTS ================================

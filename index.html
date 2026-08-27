@@ -997,13 +997,13 @@
   /* =========================================================================
      LATEST RESULTS + MEMBERSHIP STATISTICS
      These two sections are served by the "HomePage Data API" Apps Script web
-     app (source: "HomePage Data API gs").
+     app (standalone Apps Script project: "HomePage Data API/").
 
      >>> REQUIRED: paste the Data API's /exec deployment URL below. <<<
      Unlike the Championship Standings module, they do NOT fall back to
      DISCOVERY_URL - the old discovery app does not implement these actions.
      ========================================================================= */
-  const HOME_DATA_API = "https://script.google.com/macros/s/AKfycby3CuvtAkPvsrTwNMAwcG_BAQeLvb4XYyDCkguVGpoDTCv2OqILWBBfIUtNMUbFmhnuLA/exec";
+  const HOME_DATA_API = "https://script.google.com/macros/s/AKfycbzGgNMh8KNWYquGuOoGvmrasDR5npiPoNXTouuzVeY9sRwrhDo29BVDbWGrh_FfgoieXQ/exec";
   const DATA_API_BASE = HOME_DATA_API;
 
   function apiConfigured(){

@@ -1,6 +1,6 @@
-========================================
-FILE: appsscript.html
-========================================
+//======================================
+// FILE: appsscript.html
+//======================================
 
 {
   "timeZone": "Australia/Sydney",
@@ -15,9 +15,9 @@ FILE: appsscript.html
   ]
 }
 
-========================================
-FILE: LoadHelperData.gs
-========================================
+//======================================
+// FILE: LoadHelperData.gs
+//======================================
 
 function loadRegattasToConfig(){
 
@@ -172,9 +172,9 @@ function columnLetterToNumber(letter) {
   return letter.charCodeAt(0) - 64;
 }
 
-========================================
-FILE: config.gs
-========================================
+//======================================
+// FILE: config.gs
+//======================================
 
 /**
  * Public function to retrieve master data, utilizing the cache for performance.
@@ -301,9 +301,9 @@ var Config = {
 };
 
 
-========================================
-FILE: masterData.gs
-========================================
+//======================================
+// FILE: masterData.gs
+//======================================
 
 function loadMasterData() {
   const cfg = getConfig();
@@ -429,9 +429,9 @@ function loadEventData() {
 } 
 
 
-========================================
-FILE: Dispatcher.gs
-========================================
+//======================================
+// FILE: Dispatcher.gs
+//======================================
 
 function onTemplateOpen(e) {
   _Dispatcher.onNewOpen(e);
@@ -460,9 +460,9 @@ const _Dispatcher = {
 };
 
 
-========================================
-FILE: upload.gs
-========================================
+//======================================
+// FILE: upload.gs
+//======================================
 
 var UploadController = {
   archiveAndReset() {
@@ -576,9 +576,9 @@ function resetConfig(){
 }
 
 
-========================================
-FILE: Fleet.gs
-========================================
+//======================================
+// FILE: Fleet.gs
+//======================================
 
 var FleetController = {
   onNewEdit(e) {
@@ -635,9 +635,9 @@ var FleetController = {
 
 
 
-========================================
-FILE: validation.gs
-========================================
+//======================================
+// FILE: validation.gs
+//======================================
 
 var ValidationController = {
   validateAllOrThrow() {
@@ -674,9 +674,9 @@ var ValidationController = {
 }
 
 
-========================================
-FILE: utils.gs
-========================================
+//======================================
+// FILE: utils.gs
+//======================================
 
 function authMe() {
   DriveApp.getRootFolder(); // This forces the Drive permission popup
@@ -722,9 +722,9 @@ function tryNormalizeDate(dateRaw) {
     return dateRaw; 
 }
 
-========================================
-FILE: UiController.gs
-========================================
+//======================================
+// FILE: UiController.gs
+//======================================
 
 var UiController = {
 
@@ -782,9 +782,9 @@ var UiController = {
 };
 
 
-========================================
-FILE: DropdownHandler.gs
-========================================
+//======================================
+// FILE: DropdownHandler.gs
+//======================================
 
 /***** HANDLERS *****/
 /**
@@ -994,9 +994,9 @@ function findMatchingRows(searchDate, regattaType) {
 
 
 
-========================================
-FILE: AI Report.gs
-========================================
+//======================================
+// FILE: AI Report.gs
+//======================================
 
   /**
   * Calls the Gemini API from Google Apps Script.
@@ -1172,9 +1172,9 @@ function collectData() {
 }
 
 
-========================================
-FILE: helpers.gs
-========================================
+//======================================
+// FILE: helpers.gs
+//======================================
 
 function findSheetInFolder(folderName, sheetName) {
   

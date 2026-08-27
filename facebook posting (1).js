@@ -1,6 +1,6 @@
-========================================
-FILE: appsscript.html
-========================================
+//======================================
+// FILE: appsscript.html
+//======================================
 
 {
   "timeZone": "Australia/Sydney",
@@ -13,9 +13,9 @@ FILE: appsscript.html
   }
 }
 
-========================================
-FILE: config.gs
-========================================
+//======================================
+// FILE: config.gs
+//======================================
 
 /* config.gs
 * Global configuration, property keys, and setter helpers.
@@ -37,9 +37,9 @@ function getConfig() {
 }
 
 
-========================================
-FILE: Main.gs
-========================================
+//======================================
+// FILE: Main.gs
+//======================================
 
 function processNextFacebookPost() {
    const cfg = getConfig();
@@ -104,9 +104,9 @@ function annotateRoundSheet(spreadsheetID, postId) {
 
 
 
-========================================
-FILE: renderRoundSheetToPNG.gs
-========================================
+//======================================
+// FILE: renderRoundSheetToPNG.gs
+//======================================
 
 function renderRoundSheetToPNG(spreadhseetID, roundSheetId) {
   const ss = SpreadsheetApp.openById(spreadhseetID);
@@ -216,9 +216,9 @@ function postPNGToFacebook(pngBlob, caption) {
 
 
 
-========================================
-FILE: Menu.gs
-========================================
+//======================================
+// FILE: Menu.gs
+//======================================
 
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -228,9 +228,9 @@ function onOpen() {
 }
 
 
-========================================
-FILE: sidebar.gs
-========================================
+//======================================
+// FILE: sidebar.gs
+//======================================
 
 function showFacebookPostSidebar() {
   const ss = SpreadsheetApp.getActive();
@@ -246,9 +246,9 @@ function showFacebookPostSidebar() {
 }
 
 
-========================================
-FILE: Sidebar.html
-========================================
+//======================================
+// FILE: Sidebar.html
+//======================================
 
 <!DOCTYPE html>
 <html>
@@ -292,9 +292,9 @@ FILE: Sidebar.html
 </html>
 
 
-========================================
-FILE: FacebookQueue.gs
-========================================
+//======================================
+// FILE: FacebookQueue.gs
+//======================================
 
 function enqueueFacebookFromSidebar(sheetName, regattaName, raceDate, raceReport) {
   const ss = SpreadsheetApp.getActive();

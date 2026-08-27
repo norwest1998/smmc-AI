@@ -1,6 +1,6 @@
-========================================
-FILE: appsscript.html
-========================================
+//======================================
+// FILE: appsscript.html
+//======================================
 
 {
   "timeZone": "Australia/Sydney",
@@ -13,23 +13,23 @@ FILE: appsscript.html
   }
 }
 
-========================================
-FILE: Code.gs
-========================================
+//======================================
+// FILE: Code.gs
+//======================================
 
 function doGet() {
   
 }
 
 
-========================================
-FILE: Untitled.html
-========================================
+//======================================
+// FILE: Untitled.html
+//======================================
 
 <!DOCTYPE html>
 <!--
   RC SAILING CLUB — LIQUID GLASS TEMPLATE
-  =========================================
+  //=======================================
   This is built to become the shared shell for your Apps Script Web App.
   Suggested split when you move this into your Apps Script project:
 
@@ -59,9 +59,9 @@ FILE: Untitled.html
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style> 
 
-  /* =========================================================
+  /* //=======================================================
      DESIGN TOKENS — change these to re-skin every page at once
-     ========================================================= */
+     //======================================================= */
   :root{
     --ocean-deep:   #071b2c;
     --ocean-mid:    #0f3550;
@@ -116,9 +116,9 @@ FILE: Untitled.html
     100%{ transform:translate(-140px,80px); }
   }
 
-  /* =========================================================
+  /* //=======================================================
      GLASS PRIMITIVE — the one reusable surface every card uses
-     ========================================================= */
+     //======================================================= */
   .glass{
     background:linear-gradient(155deg, var(--glass-fill-hi), var(--glass-fill));
     border:1px solid var(--glass-border);
@@ -140,9 +140,9 @@ FILE: Untitled.html
     pointer-events:none;
   }
 
-  /* =========================================================
+  /* //=======================================================
      NAV
-     ========================================================= */
+     //======================================================= */
   .nav-glass{
     position:sticky; top:0; z-index:50;
     display:flex; align-items:center; justify-content:space-between;
@@ -188,9 +188,9 @@ FILE: Untitled.html
     .nav-links{ display:none; }
   }
 
-  /* =========================================================
+  /* //=======================================================
      HERO
-     ========================================================= */
+     //======================================================= */
   main{ position:relative; z-index:1; }
 
   .hero{
@@ -270,9 +270,9 @@ FILE: Untitled.html
   }
   .cond-pill .value.accent{ color:var(--signal); }
 
-  /* =========================================================
+  /* //=======================================================
      BINNACLE — the signature glass instrument
-     ========================================================= */
+     //======================================================= */
   .binnacle-wrap{ display:flex; justify-content:center; }
 
   .binnacle{
@@ -323,9 +323,9 @@ FILE: Untitled.html
   .binnacle-readout .n{ font-family:var(--font-data); font-size:22px; color:var(--foam); }
   .binnacle-readout .u{ font-family:var(--font-data); font-size:10px; color:var(--glow); letter-spacing:0.1em; }
 
-  /* =========================================================
+  /* //=======================================================
      LATEST FEED — finish-order ribbon for the most recent race
-     ========================================================= */
+     //======================================================= */
   .feed{
     max-width:1180px; margin:0 auto; padding:0 28px;
   }
@@ -400,9 +400,9 @@ FILE: Untitled.html
     .finish-chip{ width:132px; }
   }
 
-  /* =========================================================
+  /* //=======================================================
      TILE GRID — doubles as primary navigation
-     ========================================================= */
+     //======================================================= */
   .section-head{
     max-width:1180px; margin:64px auto 22px; padding:0 28px;
     display:flex; align-items:baseline; justify-content:space-between; gap:16px; flex-wrap:wrap;
@@ -445,9 +445,9 @@ FILE: Untitled.html
     letter-spacing:0.1em; text-transform:uppercase; color:var(--signal);
   }
 
-  /* =========================================================
+  /* //=======================================================
      FOOTER
-     ========================================================= */
+     //======================================================= */
   footer{
     border-top:1px solid var(--glass-border);
     padding:26px 28px; margin-top:0;

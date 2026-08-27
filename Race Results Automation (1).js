@@ -1,6 +1,6 @@
-========================================
-FILE: appsscript.html
-========================================
+//========================================
+//// FILE: appsscript.html
+//========================================
 
 {
   "timeZone": "Australia/Sydney",
@@ -26,9 +26,9 @@ FILE: appsscript.html
   }
 }
 
-========================================
-FILE: config.gs
-========================================
+//========================================
+//// FILE: config.gs
+//========================================
 
 /* config.gs
 * Global configuration, property keys, and setter helpers.
@@ -109,9 +109,9 @@ function setScriptProperty(key, value) {
 }
 
 
-========================================
-FILE: masterData.gs
-========================================
+//========================================
+//// FILE: masterData.gs
+//========================================
 
 /**
  * Public function to retrieve master data, utilizing the cache for performance.
@@ -240,9 +240,9 @@ function sheetToObjects(ss, sheetName, keys) {
 
 
 
-========================================
-FILE: main.gs
-========================================
+//========================================
+//// FILE: main.gs
+//========================================
 
 /**
 * Orchestrator: scan upload folder for new files, parse, score, write and post
@@ -341,9 +341,6 @@ function processNewRegattaSheets() {
 
 
 /**
- * Rename and move processed race results file
- */
-/**
  * Rename and move processed race results file, and schedule Facebook post.
  */
 function finalizeRaceResultsFile(file, parsed, overallSheetID, roundResult) {
@@ -407,9 +404,9 @@ function finalizeRaceResultsFile(file, parsed, overallSheetID, roundResult) {
 }
 
 
-========================================
-FILE: parser.gs
-========================================
+//========================================
+//// FILE: parser.gs
+//========================================
 
 /**
 * Parse a Race Results sheet and return structured object
@@ -491,9 +488,9 @@ function initSail(obj, sailNum, totalRaces) {
   }
 }
 
-========================================
-FILE: scoring.gs
-========================================
+//========================================
+//// FILE: scoring.gs
+//========================================
 
 /**
 * Scoring routines — low-point system with discards
@@ -741,9 +738,9 @@ function buildScoresFromRaces(parsed, membersData, raceType) {
 
 
 
-========================================
-FILE: ScoringHelpers.gs
-========================================
+//========================================
+//// FILE: ScoringHelpers.gs
+//========================================
 
 function parseHcapFormula(formula) {
   return formula.split(',').map(t => t.trim());
@@ -957,9 +954,9 @@ function getRegattaConfigByName(regattaName) {
 }
 
 
-========================================
-FILE: rankScores.gs
-========================================
+//========================================
+//// FILE: rankScores.gs
+//========================================
 
 function rankScoresMap(scoreMap) {
   // Clone to avoid mutating original
@@ -1024,9 +1021,9 @@ function compareA82(a, b) {
 }
 
 
-========================================
-FILE: createOverall.gs
-========================================
+//========================================
+//// FILE: createOverall.gs
+//========================================
 
 /**
  * Finds or creates an Overall Results sheet for a regatta type
@@ -1160,9 +1157,9 @@ function overallSetup(bookID, parsed, members, raceType) {
   console.log('File setup for ' + memberData.length + ' competitors');
 }
 
-========================================
-FILE: roundSheet.gs
-========================================
+//========================================
+//// FILE: roundSheet.gs
+//========================================
 
 /**
  * Writes the results for a single round to its own sheet in the regatta book.
@@ -1403,9 +1400,9 @@ return { sheetID, roundNumber };
 }
 
 
-========================================
-FILE: appendRound.gs
-========================================
+//========================================
+//// FILE: appendRound.gs
+//========================================
 
 /*************************************
  * Add Round to Overall sheet.
@@ -1678,9 +1675,9 @@ function appendHCRound(bookID, parsed, handicaps) {
   console.log("Handicaps updated");
 }
 
-========================================
-FILE: utils.gs
-========================================
+//========================================
+//// FILE: utils.gs
+//========================================
 
 /** Utility helpers */
 function formatDate(d){
@@ -1742,9 +1739,9 @@ function getRoundSheetByEventID(eventID) {
   return ss.getSheets().find(s => s.getSheetId() === sheetID);
 }
 
-========================================
-FILE: helpers.gs
-========================================
+//========================================
+//// FILE: helpers.gs
+//========================================
 
 /**
  * Checks the Overall Results sheet for missing members and adds them,
@@ -2002,9 +1999,9 @@ function lockSheetForAutomation(sheet) {
 }
 
 
-========================================
-FILE: formatting.gs
-========================================
+//========================================
+//// FILE: formatting.gs
+//========================================
 
 function applySeriesFormatting(sheetID, raceType) {
   const ss = SpreadsheetApp.openById(sheetID);
@@ -2209,9 +2206,9 @@ function applyRoundCardFormatting(sh) {
 
 }
 
-========================================
-FILE: Round WebApp.gs
-========================================
+//========================================
+//// FILE: Round WebApp.gs
+//========================================
 
 // Race Result Automation - Round Tracker Integration
 // Google Apps Script version
@@ -2577,9 +2574,9 @@ function testConnection() {
   }
 }
 
-========================================
-FILE: tests.gs
-========================================
+//========================================
+//// FILE: tests.gs
+//========================================
 
 const CONFIG = {
   SheetID: "18c2johld4J7gzkoSH63qp6qh7w--6t-1F_94vs4tBoc",

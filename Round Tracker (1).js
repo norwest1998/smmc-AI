@@ -1,6 +1,6 @@
-========================================
-FILE: appsscript.html
-========================================
+//======================================
+// FILE: appsscript.html
+//======================================
 
 {
   "timeZone": "Australia/Sydney",
@@ -13,9 +13,9 @@ FILE: appsscript.html
   }
 }
 
-========================================
-FILE: Code.gs
-========================================
+//======================================
+// FILE: Code.gs
+//======================================
 
 // Round Tracker Web App for Google Sheets
 // Deploy as Web App: Deploy > New deployment > Web app

@@ -1,6 +1,6 @@
-========================================
-FILE: appsscript.html
-========================================
+//======================================
+// FILE: appsscript.html
+//======================================
 
 {
   "timeZone": "Australia/Sydney",
@@ -10,9 +10,9 @@ FILE: appsscript.html
   "runtimeVersion": "V8"
 }
 
-========================================
-FILE: config.gs
-========================================
+//======================================
+// FILE: config.gs
+//======================================
 
 const PROP_GEMINI_API_KEY = "GEMINI_API_KEY";
 const PROP_IMAGE_LIBRARY_ID = "IMAGE_LIBRARY_ID";
@@ -38,9 +38,9 @@ function getConfig() {
 Logger.log("key: " + GEMINI_API_KEY);
 
 
-========================================
-FILE: Code.gs
-========================================
+//======================================
+// FILE: Code.gs
+//======================================
 
 function generateWeeklyImage() {
   // Get weekend racing events.
@@ -166,9 +166,9 @@ function callGoogleImagenAPI(payload) {
 
 
 
-========================================
-FILE: helpers.gs
-========================================
+//======================================
+// FILE: helpers.gs
+//======================================
 
 function getEvents() {
   const webAppUrl = "https://script.google.com/macros/s/AKfycbxh7FmiPU34XJy6hnP-uR3AMfEuApD0fqBDs9fXnkRPYFKgQ-6gv8hapY1aOdeuLuO6ZA/exec";

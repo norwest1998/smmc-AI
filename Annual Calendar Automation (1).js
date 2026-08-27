@@ -1,6 +1,6 @@
-========================================
-FILE: appsscript.html
-========================================
+//======================================
+// // FILE: appsscript.html
+//======================================
 
 {
   "timeZone": "Australia/Sydney",
@@ -21,9 +21,9 @@ FILE: appsscript.html
   }
 }
 
-========================================
-FILE: onEdit.gs
-========================================
+//======================================
+// // FILE: onEdit.gs
+//======================================
 
  function onEdit(e) {
   const sheet = e.source.getActiveSheet();
@@ -89,9 +89,9 @@ if (currentHex !== "" && protectedCols.includes(col)) {
 
 
 
-========================================
-FILE: Regional Conflicts.gs
-========================================
+//======================================
+// // FILE: Regional Conflicts.gs
+//======================================
 
 
 
@@ -571,17 +571,17 @@ function createHyperlinkRichText(conflicts) {
   return richTextBuilder.build();
 }
 
-========================================
-FILE: Web App.gs
-========================================
+//======================================
+// // FILE: Web App.gs
+//======================================
 
-// =========================================================
+// //=======================================================
 // DAILY FORECAST CARD CSS
 // Same tokens as the rest of the site (--glass-fill, --foam, etc).
 // Kept as a standalone constant so it's easy to find/edit, and so it
 // can be injected into the HTML output regardless of how renderPage()
 // builds its <head>.
-// =========================================================
+// //=======================================================
 
 
 
@@ -850,13 +850,13 @@ function getWeatherDescription(code) {
   return map[code] || { label: 'Forecast', icon: '🌡️' };
 }
 
-========================================
-FILE: helpers.gs
-========================================
+//======================================
+// // FILE: helpers.gs
+//======================================
 
-/* =====================================================
+/* //===================================================
    SINGLE HTML SHELL (NO DUPLICATION)
-   ===================================================== */
+   //=================================================== */
 function renderPage(title, bodyContent) {
   return `
 <!DOCTYPE html>
@@ -1289,9 +1289,9 @@ function getBackgroundImage(code) {
 
 
 
-========================================
-FILE: addToGoogle.gs
-========================================
+//======================================
+// // FILE: addToGoogle.gs
+//======================================
 
 function addToGoogleCalendar() {
   // var ui = SpreadsheetApp.getUi();
@@ -1422,9 +1422,9 @@ function addToGoogleCalendar() {
   //}
 }
 
-========================================
-FILE: config.gs
-========================================
+//======================================
+// // FILE: config.gs
+//======================================
 
 /* config.gs
 * Global configuration, property keys, and setter helpers.
@@ -1479,9 +1479,9 @@ var Config = {
 };
 
 
-========================================
-FILE: GetWeatherPic.gs
-========================================
+//======================================
+// // FILE: GetWeatherPic.gs
+//======================================
 
 /**
  * Returns a background image URL for a given race date (Saturday)
@@ -1599,9 +1599,9 @@ Logger.log("weather code: " + weatherCode);
 
 
 
-========================================
-FILE: UpdateUpcoming.gs
-========================================
+//======================================
+// // FILE: UpdateUpcoming.gs
+//======================================
 
 function updateUpcoming() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1610,9 +1610,9 @@ function updateUpcoming() {
 }
 
 
-========================================
-FILE: SyncCalendars.gs
-========================================
+//======================================
+// // FILE: SyncCalendars.gs
+//======================================
 
 function syncMembersDirectlyToCalendarSeries() {
  
@@ -1721,9 +1721,9 @@ function syncMembersDirectlyToCalendarSeries() {
   }
 }
 
-========================================
-FILE: test.gs
-========================================
+//======================================
+// // FILE: test.gs
+//======================================
 
 function myFunction() {
   var calendarId = 'Primary'; 
@@ -1737,9 +1737,9 @@ function myFunction() {
 }
 
 
-========================================
-FILE: Old Web App.gs
-========================================
+//======================================
+// // FILE: Old Web App.gs
+//======================================
 
 function oldDoGet(e) {
 

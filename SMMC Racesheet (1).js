@@ -1,6 +1,6 @@
-========================================
-FILE: appsscript.html
-========================================
+//======================================
+// FILE: appsscript.html
+//======================================
 
 {
   "timeZone": "Australia/Sydney",
@@ -13,9 +13,9 @@ FILE: appsscript.html
   }
 }
 
-========================================
-FILE: Code.gs
-========================================
+//======================================
+// FILE: Code.gs
+//======================================
 
 function mobileSubmitTrigger(e) {
 
@@ -203,9 +203,9 @@ function mobileSubmitTrigger(e) {
   }
 }
 
-========================================
-FILE: rankingHelpers.gs
-========================================
+//======================================
+// FILE: rankingHelpers.gs
+//======================================
 
 function runAutomatedLeaderboard(ss, shResults, boats) {
   var races = shResults.getRange("G3").getValue(); 
@@ -332,9 +332,9 @@ function compareA82(a, b) {
   return 0;
 }
 
-========================================
-FILE: formatResults.gs
-========================================
+//======================================
+// FILE: formatResults.gs
+//======================================
 
 function applyRoundCardFormatting(sh) {
   const lastCol = sh.getLastColumn();
@@ -430,9 +430,9 @@ function applyRoundCardFormatting(sh) {
 }
 
 
-========================================
-FILE: webApp.gs
-========================================
+//======================================
+// FILE: webApp.gs
+//======================================
 
 // Handles GET requests from GitHub Pages
 function doGet(e) {

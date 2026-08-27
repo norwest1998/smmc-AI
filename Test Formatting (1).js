@@ -1,6 +1,6 @@
-========================================
-FILE: appsscript.html
-========================================
+//======================================
+// FILE: appsscript.html
+//======================================
 
 {
   "timeZone": "Australia/Sydney",
@@ -10,9 +10,9 @@ FILE: appsscript.html
   "runtimeVersion": "V8"
 }
 
-========================================
-FILE: menu.gs
-========================================
+//======================================
+// FILE: menu.gs
+//======================================
 
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -23,9 +23,9 @@ function onOpen() {
 }
 
 
-========================================
-FILE: formatOverall.gs
-========================================
+//======================================
+// FILE: formatOverall.gs
+//======================================
 
 function applyOverallFormatting() {
   
@@ -109,9 +109,9 @@ function applyOverallFormatting() {
 
 
 
-========================================
-FILE: formatRound.gs
-========================================
+//======================================
+// FILE: formatRound.gs
+//======================================
 
 function applyRoundCardFormatting() {
   // replace this code with sh in teh parameters
@@ -211,9 +211,9 @@ function applyRoundCardFormatting() {
 
 }
 
-========================================
-FILE: wip.gs
-========================================
+//======================================
+// FILE: wip.gs
+//======================================
 
 function wip() {
   // 7. Add medal overlays for top 3 ranks (gold, silver, bronze)

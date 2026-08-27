@@ -1,6 +1,6 @@
-========================================
-FILE: appsscript.html
-========================================
+//======================================
+// FILE: appsscript.html
+//======================================
 
 {
   "timeZone": "Australia/Sydney",
@@ -10,9 +10,9 @@ FILE: appsscript.html
   "runtimeVersion": "V8"
 }
 
-========================================
-FILE: Menu.gs
-========================================
+//======================================
+// FILE: Menu.gs
+//======================================
 
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -22,9 +22,9 @@ function onOpen() {
 }
 
 
-========================================
-FILE: config.gs
-========================================
+//======================================
+// FILE: config.gs
+//======================================
 
  /* config.gs
 * Global configuration, property keys, and setter helpers.
@@ -60,9 +60,9 @@ function setScriptProperty(key, value) {
 
 
 
-========================================
-FILE: Main.gs
-========================================
+//======================================
+// FILE: Main.gs
+//======================================
 
 function processNextFacebookPost() {
   const sheet = SpreadsheetApp.getActive()
@@ -116,9 +116,9 @@ function processFacebookQueueRow(row, rowIndex, queueSheet) {
 
 
 
-========================================
-FILE: renderRoundSheetToPNG.gs
-========================================
+//======================================
+// FILE: renderRoundSheetToPNG.gs
+//======================================
 
   function renderRoundSheetToPNG(spreadsheetId, roundSheetId) {
   const ss = SpreadsheetApp.openById(spreadsheetId);
@@ -254,9 +254,9 @@ function postPNGToFacebook(pngBlob, caption) {
 
 
 
-========================================
-FILE: FcebookQueue.gs
-========================================
+//======================================
+// FILE: FcebookQueue.gs
+//======================================
 
 /**
  * Show the Facebook posting sidebar
@@ -351,9 +351,9 @@ function enqueueFacebookTestRow(data) {
   ]);
 }
 
-========================================
-FILE: FacebookPostSidebar.html
-========================================
+//======================================
+// FILE: FacebookPostSidebar.html
+//======================================
 
 <!DOCTYPE html>
 <html>

@@ -1,7 +1,7 @@
 /*
-====================================================================================
+//======================================//==========================================
  SEASON FIXTURE GENERATOR  (Google Apps Script)
-====================================================================================
+//======================================//==========================================
  Creates the fixtures for a new sailing season in the "Event Data" sheet of the
  "SMMC Annual Calendar" spreadsheet.
 
@@ -38,7 +38,7 @@
            .addItem('Generate Season Fixtures', 'generateSeasonFixtures')
            .addToUi();
      or simply call seasonFixturesMenu() inside your existing onOpen().
-====================================================================================
+//======================================//==========================================
 */
 
 // ================================ CONFIGURATION ================================
@@ -245,7 +245,7 @@ function readRegattas_(ss) {
   return regattas;
 }
 
-// ---- [pure-helpers-start] =====================================================
+// ---- [pure-helpers-start] //===================================================
 
 /** Strips time-of-day, returning midnight of the same date. */
 function dateOnly_(date) {
@@ -346,7 +346,7 @@ function buildSeasonSchedule_(season, regattas) {
   return events;
 }
 
-// ---- [pure-helpers-end] =======================================================
+// ---- [pure-helpers-end] //=====================================================
 
 // =============================== SHEET WRITER ==================================
 

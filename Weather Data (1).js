@@ -1,6 +1,6 @@
-========================================
-FILE: appsscript.html
-========================================
+//======================================
+// FILE: appsscript.html
+//======================================
 
 {
   "timeZone": "Australia/Sydney",
@@ -21,9 +21,9 @@ FILE: appsscript.html
   "runtimeVersion": "V8"
 }
 
-========================================
-FILE: Parameters.gs
-========================================
+//======================================
+// FILE: Parameters.gs
+//======================================
 
 function buildMenu() {
   const ui = SpreadsheetApp.getUi();
@@ -52,9 +52,9 @@ function getWeatherConfig() {
 
 
 
-========================================
-FILE: Icon Map.gs
-========================================
+//======================================
+// FILE: Icon Map.gs
+//======================================
 
 function resolveWeatherIcon(iconCode) {
   const map = {
@@ -112,9 +112,9 @@ function getArrow(degree) {
 
 
 
-========================================
-FILE: Archive Data.gs
-========================================
+//======================================
+// FILE: Archive Data.gs
+//======================================
 
 function archiveHourlyForecast(data) {
   const cfg = getWeatherConfig();
@@ -223,9 +223,9 @@ function archiveDailyForecast(data) {
   }
 }
 
-========================================
-FILE: Create Hourly Chart.gs
-========================================
+//======================================
+// FILE: Create Hourly Chart.gs
+//======================================
 
 function createHourlyForecastChartOnDashboard() {
   const cfg = getWeatherConfig();
@@ -387,9 +387,9 @@ Logger.log(buckets);
 }
 
 
-========================================
-FILE: Build Chart MetaData.gs
-========================================
+//======================================
+// FILE: Build Chart MetaData.gs
+//======================================
 
 function buildHourlyMetadataStrip(targetDate) {
   const cfg = getWeatherConfig();
@@ -446,9 +446,9 @@ function buildHourlyMetadataStrip(targetDate) {
 }
 
 
-========================================
-FILE: Helpers.gs
-========================================
+//======================================
+// FILE: Helpers.gs
+//======================================
 
 
 
@@ -580,9 +580,9 @@ function getBackgroundImage(code) {
 
 
 
-========================================
-FILE: tests.gs
-========================================
+//======================================
+// FILE: tests.gs
+//======================================
 
 function myFunction() {
   const date = new Date();
@@ -590,9 +590,9 @@ function myFunction() {
 }
 
 
-========================================
-FILE: Weather infographic.gs
-========================================
+//======================================
+// FILE: Weather infographic.gs
+//======================================
 
 function createInfographic() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -824,9 +824,9 @@ function createInfographic() {
   dashSh.setColumnWidth(7, 200);
 }
 
-========================================
-FILE: index.html
-========================================
+//======================================
+// FILE: index.html
+//======================================
 
 <!DOCTYPE html>
 <html>
@@ -987,9 +987,9 @@ FILE: index.html
 </html>
 
 
-========================================
-FILE: Web Get.gs
-========================================
+//======================================
+// FILE: Web Get.gs
+//======================================
 
 function doGet() {
   const ss = SpreadsheetApp.getActive();
@@ -1027,13 +1027,13 @@ function doGet() {
 
 
 
-========================================
-FILE: WZ Get Forecast.gs
-========================================
+//======================================
+// FILE: WZ Get Forecast.gs
+//======================================
 
-// ==========================================
+// //========================================
 // 1. MAIN DAILY FUNCTION
-// ==========================================
+// //========================================
 function fetchWZDaily() {
   // Clear any daily retry triggers first
   deleteTriggersFor('retryDaily');
@@ -1087,9 +1087,9 @@ function fetchWZDaily() {
   }
 }
 
-// ==========================================
+// //========================================
 // 2. MAIN HOURLY FUNCTION
-// ==========================================
+// //========================================
 function fetchWZHourly() {
   // Clear any hourly retry triggers first
   deleteTriggersFor('retryHourly');
@@ -1132,9 +1132,9 @@ function fetchWZHourly() {
   }
 }
 
-// ==========================================
+// //========================================
 // 3. TARGETED RETRY HANDLERS
-// ==========================================
+// //========================================
 function retryDaily() {
   Logger.log("Retry trigger fired for Daily data...");
   fetchWZDaily();
@@ -1145,9 +1145,9 @@ function retryHourly() {
   fetchWZHourly();
 }
 
-// ==========================================
+// //========================================
 // 4. SMART TRIGGER UTILITIES
-// ==========================================
+// //========================================
 function createRetryTrigger(functionName, minutes) {
   // Clean up any existing triggers for this specific retry function first
   deleteTriggersFor(functionName);
@@ -1174,9 +1174,9 @@ function deleteTriggersFor(functionName) {
   }
 }
 
-========================================
-FILE: WZ Get Actual.gs
-========================================
+//======================================
+// FILE: WZ Get Actual.gs
+//======================================
 
 function fetchWZHistoricalWeather() {
   const cfg = getWeatherConfig();
@@ -1227,9 +1227,9 @@ function fetchWZHistoricalWeather() {
   //}
 }
 
-========================================
-FILE: WZ Store Hourly.gs
-========================================
+//======================================
+// FILE: WZ Store Hourly.gs
+//======================================
 
 function storeWZHourly(hourly, type) {
   Logger.log("Hourly: " + " Time: " + hourly.time[0] + " type: " + type);
@@ -1318,9 +1318,9 @@ function storeWZHourly(hourly, type) {
   Logger.log(`Success! Stored ${numHours} hourly records for ${startDate}.`);
 }
 
-========================================
-FILE: WZ Store Daily.gs
-========================================
+//======================================
+// FILE: WZ Store Daily.gs
+//======================================
 
 function storeWZDaily(daily) {
   Logger.log("In Daily");
@@ -1357,9 +1357,9 @@ function storeWZDaily(daily) {
 
 
 
-========================================
-FILE: WZ Store Current.gs
-========================================
+//======================================
+// FILE: WZ Store Current.gs
+//======================================
 
 function storeWZCurrent(c) {
   Logger.log("In current");
@@ -1404,9 +1404,9 @@ function storeWZCurrent(c) {
 
 
 
-========================================
-FILE: WZ Get Current.gs
-========================================
+//======================================
+// FILE: WZ Get Current.gs
+//======================================
 
 function fetchWZCurrent() {
 

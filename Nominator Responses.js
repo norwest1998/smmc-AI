@@ -1,6 +1,6 @@
-========================================
-FILE: appsscript.html
-========================================
+//======================================
+// FILE: appsscript.html
+//======================================
 
 {
   "timeZone": "Australia/Sydney",
@@ -10,9 +10,9 @@ FILE: appsscript.html
   "runtimeVersion": "V8"
 }
 
-========================================
-FILE: onOpen.gs
-========================================
+//======================================
+// FILE: onOpen.gs
+//======================================
 
 /**
  * Populates the choices of a Multiple Choice question named "Application"

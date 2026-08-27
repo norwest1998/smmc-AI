@@ -1,6 +1,6 @@
-========================================
-FILE: appsscript.html
-========================================
+//======================================
+// FILE: appsscript.html
+//======================================
 
 {
   "timeZone": "Australia/Sydney",
@@ -21,9 +21,9 @@ FILE: appsscript.html
   }
 }
 
-========================================
-FILE: sendUpdateRequests.gs
-========================================
+//======================================
+// FILE: sendUpdateRequests.gs
+//======================================
 
 // --- CONFIGURATION ---
 const SPREADSHEET_ID = SpreadsheetApp.getActiveSpreadsheet().getId();
@@ -258,9 +258,9 @@ function processForm(formData) {
 }
 
 
-========================================
-FILE: Index.html
-========================================
+//======================================
+// FILE: Index.html
+//======================================
 
 <!DOCTYPE html>
 <html>
@@ -490,9 +490,9 @@ FILE: Index.html
 </body>
 </html>
 
-========================================
-FILE: sendCalendarInvites.gs.gs
-========================================
+//======================================
+// FILE: sendCalendarInvites.gs.gs
+//======================================
 
 function sendClassInviteEmails() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -571,9 +571,9 @@ function sendClassInviteEmails() {
   }
 }
 
-========================================
-FILE: helpers.gs
-========================================
+//======================================
+// FILE: helpers.gs
+//======================================
 
 function buildMenu() {
   const ui = SpreadsheetApp.getUi();
@@ -586,9 +586,9 @@ function buildMenu() {
 }
 
 
-========================================
-FILE: syncCalendars.gs
-========================================
+//======================================
+// FILE: syncCalendars.gs
+//======================================
 
 function syncMembersDirectlyToCalendarSeries() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -722,9 +722,9 @@ function syncMembersDirectlyToCalendarSeries() {
   }
 }
 
-========================================
-FILE: updateMemberships.gs
-========================================
+//======================================
+// FILE: updateMemberships.gs
+//======================================
 
 /**
  * Function 1: renewMemberships

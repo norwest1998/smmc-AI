@@ -1,0 +1,15 @@
+{
+  "scriptId": "REPLACE_WITH_HOME_PAGE_DATA_API_SCRIPT_ID",
+  "rootDir": "",
+  "scriptExtensions": [
+    ".gs"
+  ],
+  "htmlExtensions": [
+    ".html"
+  ],
+  "jsonExtensions": [
+    ".json"
+  ],
+  "filePushOrder": [],
+  "skipSubdirectories": false
+}

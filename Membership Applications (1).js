@@ -1,6 +1,6 @@
-========================================
-FILE: appsscript.html
-========================================
+//======================================
+// FILE: appsscript.html
+//======================================
 
 {
   "timeZone": "Australia/Sydney",
@@ -23,9 +23,9 @@ FILE: appsscript.html
   ]
 }
 
-========================================
-FILE: config.gs
-========================================
+//======================================
+// FILE: config.gs
+//======================================
 
 const CONFIG = {
   masterDataID: '1nFqeV1U0c_RLaZK4amf7QR1MMwB9q8gZLc4HriUH9iI',
@@ -68,9 +68,9 @@ const CONFIG = {
   tokensHeader: ['Token','Type','Name','RowID','Used','Expiry']
   }
 
-========================================
-FILE: WebApp.gs
-========================================
+//======================================
+// FILE: WebApp.gs
+//======================================
 
 // ---------------------- VOTING WEB APP (doPost) ----------------------
 
@@ -170,9 +170,9 @@ function doGet(e) {
 
 
 
-========================================
-FILE: WebAppProcess.gs
-========================================
+//======================================
+// FILE: WebAppProcess.gs
+//======================================
 
 function handleProcessingRequest(params) {
   try {
@@ -212,9 +212,9 @@ function handleProcessingRequest(params) {
 
 
 
-========================================
-FILE: ApplicationForm.html
-========================================
+//======================================
+// FILE: ApplicationForm.html
+//======================================
 
 <!DOCTYPE html>
 <html>
@@ -693,9 +693,9 @@ FILE: ApplicationForm.html
 </body>
 </html>
 
-========================================
-FILE: processApplication.gs
-========================================
+//======================================
+// FILE: processApplication.gs
+//======================================
 
 /**
  * Processes submission from HTML Membership Application page.
@@ -775,9 +775,9 @@ function submitApplication(formData) {
 }
 
 
-========================================
-FILE: emailProcessing.gs
-========================================
+//======================================
+// FILE: emailProcessing.gs
+//======================================
 
 // Helper function to send the final approval/rejection email to the applicant
 function sendFinalApplicantEmail(sheet, row, finalStatus) {
@@ -1109,9 +1109,9 @@ function getNominatorEmails(nominator) {
   return "Not found";
 }
 
-========================================
-FILE: NominatingForm.html
-========================================
+//======================================
+// FILE: NominatingForm.html
+//======================================
 
 <!DOCTYPE html>
 <html>
@@ -1439,11 +1439,11 @@ FILE: NominatingForm.html
 </body>
 </html>
 
-========================================
-FILE: Response.gs
-========================================
+//======================================
+// FILE: Response.gs
+//======================================
 
-// File: Responses.gs (Reworked)
+// // FILE: Responses.gs (Reworked)
 
 /**
  * Main onEdit trigger function.
@@ -1602,9 +1602,9 @@ function initiateDeliberation(sheet, row) {
 
 
 
-========================================
-FILE: VotingForm.html
-========================================
+//======================================
+// FILE: VotingForm.html
+//======================================
 
 <!DOCTYPE html>
 <html>
@@ -1996,9 +1996,9 @@ FILE: VotingForm.html
 </body>
 </html>
 
-========================================
-FILE: NewMember.gs
-========================================
+//======================================
+// FILE: NewMember.gs
+//======================================
 
 /**
  * Adds an approved member to the Members sheet in the Club Management workbook.
@@ -2186,9 +2186,9 @@ function markMemberAsPaid(memberNo) {
   return null;
 }
 
-========================================
-FILE: Reminder.gs
-========================================
+//======================================
+// FILE: Reminder.gs
+//======================================
 
 function checkReminderAndSendEmail() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.membershipSheetName);
@@ -2292,9 +2292,9 @@ SMMC Admin AI`;
 
 
 
-========================================
-FILE: helpers.gs
-========================================
+//======================================
+// FILE: helpers.gs
+//======================================
 
 function updateReminderDate(row) {
   const ss = SpreadsheetApp.openByUrl(CONFIG.appLink);
@@ -2486,9 +2486,9 @@ function renderMarkPaidPage(info) {
 
 
 
-========================================
-FILE: nominationHelpers.gs
-========================================
+//======================================
+// FILE: nominationHelpers.gs
+//======================================
 
 function renderNominationForm(tokenInfo) {
   console.log("In render nomination form");
@@ -2608,9 +2608,9 @@ function handleNomination(params) {
   return `Thank you, ${member}. Your decision, Support the nomination - '${agree}', has been recorded.`;
 }
 
-========================================
-FILE: votingHelpers.gs
-========================================
+//======================================
+// FILE: votingHelpers.gs
+//======================================
 
 function renderVotingForm(tokenInfo) {
   // 1. Create the template from the file
@@ -2853,9 +2853,9 @@ function invalidateTokensForRow(rowId){
 }
 
 
-========================================
-FILE: displayApplication.gs
-========================================
+//======================================
+// FILE: displayApplication.gs
+//======================================
 
 function displayApplication(row) {
   console.log("In Display Application: " + row);
@@ -2916,9 +2916,9 @@ function displayApplication(row) {
 }
 
 
-========================================
-FILE: detailView.html
-========================================
+//======================================
+// FILE: detailView.html
+//======================================
 
 <!DOCTYPE html>
 <html>
@@ -3177,9 +3177,9 @@ FILE: detailView.html
 </body>
 </html>
 
-========================================
-FILE: utils.gs
-========================================
+//======================================
+// FILE: utils.gs
+//======================================
 
 
 /**
@@ -3195,9 +3195,9 @@ function getSheetLink() {
 
 
 
-========================================
-FILE: Tests.gs
-========================================
+//======================================
+// FILE: Tests.gs
+//======================================
 
 function testNominationDateUpdate() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
