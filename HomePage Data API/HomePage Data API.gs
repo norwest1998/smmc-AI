@@ -42,7 +42,7 @@ var HPAPI_CFG = {
   membershipSheetName: 'Membership Applications',
   membershipDataStartRow: 8,
 
-  annualCalendarId: '',                    // e.g. '1AbC...' - blank = resolve by name
+  annualCalendarId: '1AVopdio8GLzwYGQjiX7qiVBXWQVpmArmaGBLWYTHxrM',                    // e.g. '1AbC...' - blank = resolve by name
   annualCalendarName: 'SMMC Annual Calendar',
   eventDataSheet: 'Event Data',
   eventDataStatusCol: 15,                  // Column O - fallback when no "Status" header
