@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+  <base target="_top">
+
+  <style>
+
+    body{
+      font-family:Arial,sans-serif;
+      margin:20px;
+    }
+
+    select{
+      width:100%;
+      padding:6px;
+      margin-top:10px;
+      margin-bottom:20px;
+    }
+
+    .buttons{
+
+      text-align:right;
+
+    }
+
+  </style>
+
+</head>
+
+<body>
+
+<h3><?= options.title ?></h3>
+
+<select id="project">
+  <? projects.forEach(function(project){ ?>
+    <option value="<?= project.scriptID || project.scriptId ?>" data-project-name="<?= project.projectName ?>">
+      <?= project.projectName ?>
+    </option>
+  <? }); ?>
+</select>
+
+<div class="buttons">
+  <button onclick="google.script.host.close()">
+    Cancel
+  </button>
+  <button id="backupBtn" onclick="backup()">
+    Backup
+  </button>
+</div>
+
+<script>
+
+function backup() {
+
+    const button =
+        document.getElementById("backupBtn");
+
+    button.disabled = true;
+    button.innerHTML = "Backing up...";
+
+    const projectSelect = document.getElementById("project");
+    // Get the selected <option> element
+    const selectedOption = projectSelect.options[projectSelect.selectedIndex];
+    
+    const scriptId = selectedOption.value;
+    const fileName = selectedOption.getAttribute("data-project-name");
+
+    google.script.run
+
+        .withSuccessHandler(function(result){
+
+            if (result.success) {
+
+                alert(
+                    "Backup completed successfully.\n\n" +
+                    "Project : " + result.projectName +
+                    "\nStatus  : " + result.status +
+                    "\nTime    : " +
+                    result.duration.toFixed(1) +
+                    " seconds"
+                );
+
+                google.script.host.close();
+
+            }
+            else {
+                button.disabled = false;
+                button.innerHTML = "Backup";
+
+                alert(
+                    "Backup failed.\n\n" +
+                    result.message
+                );
+
+            }
+
+        })
+
+        .withFailureHandler(function(error){
+            button.disabled = false;
+            button.innerHTML = "Backup";
+            alert(error.message);
+
+
+        })
+
+        .convertScriptToTxt(scriptId,fileName);
+
+}
+
+</script>
+
+</body>
+
+</html>

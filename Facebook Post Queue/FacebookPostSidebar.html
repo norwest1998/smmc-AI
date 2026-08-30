@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+  </head>
+  <body>
+    <form id="fbForm">
+      <label for="sheetSelect">Select Round Sheet:</label><br>
+      <select id="sheetSelect"></select>
+      <br><br>
+
+      <label for="raceReport">Race Report (optional):</label><br>
+      <textarea id="raceReport"></textarea>
+      <br><br>
+
+      <input type="button" value="Enqueue for Facebook" onclick="submitForm()">
+    </form>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const sheetList = JSON.parse('<?!= sheetListJSON ?>');
+
+        const select = document.getElementById('sheetSelect');
+        const regattaInput = document.getElementById('regattaName');
+        const dateInput = document.getElementById('raceDate');
+
+        // Populate dropdown
+        sheetList.forEach((item, index) => {
+          const opt = document.createElement('option');
+          opt.value = index;
+          opt.textContent = `${item.spreadsheetName} → ${item.sheetName}`;
+          select.appendChild(opt);
+        });
+
+        // On selection, auto-fill Regatta Name and Race Date
+        select.addEventListener('change', () => {
+          const selected = sheetList[select.value];
+        });
+
+        // Preselect first sheet
+        if(sheetList.length > 0){
+          select.value = 0;
+          select.dispatchEvent(new Event('change'));
+        }
+
+        // Submit function
+        window.submitForm = function() {
+          const sheetIndex = select.value;
+          const raceReport = document.getElementById('raceReport').value;
+
+          google.script.run.withSuccessHandler(() => {
+            alert('Round sheet enqueued for Facebook posting!');
+          }).enqueueFacebookFromSidebar(sheetIndex);
+        };
+      });
+    </script>
+  </body>
+</html>

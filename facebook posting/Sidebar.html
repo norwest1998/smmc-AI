@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+  </head>
+  <body>
+    <form id="fbForm">
+      <label for="sheetSelect">Select Round Sheet:</label><br>
+      <select id="sheetSelect" name="sheetName">
+        <? for (var i = 0; i < sheets.length; i++) { ?>
+          <option value="<?= sheets[i] ?>"><?= sheets[i] ?></option>
+        <? } ?>
+      </select>
+      <br><br>
+      <label for="regattaName">Regatta Name:</label><br>
+      <input type="text" id="regattaName" name="regattaName" placeholder="Club Racing">
+      <br><br>
+      <label for="raceDate">Race Date (YYYY-MM-DD):</label><br>
+      <input type="text" id="raceDate" name="raceDate">
+      <br><br>
+      <label for="raceReport">Race Report (optional):</label><br>
+      <textarea id="raceReport" name="raceReport"></textarea>
+      <br><br>
+      <input type="button" value="Enqueue for Facebook" onclick="submitForm()">
+    </form>
+
+    <script>
+      function submitForm() {
+        const sheetName = document.getElementById('sheetSelect').value;
+        const regattaName = document.getElementById('regattaName').value;
+        const raceDate = document.getElementById('raceDate').value;
+        const raceReport = document.getElementById('raceReport').value;
+
+        google.script.run.withSuccessHandler(() => {
+          alert('Round sheet enqueued for Facebook posting!');
+        }).enqueueFacebookFromSidebar(sheetName, regattaName, raceDate, raceReport);
+      }
+    </script>
+  </body>
+</html>

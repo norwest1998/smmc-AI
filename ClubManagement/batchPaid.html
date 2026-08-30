@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      :root {
+        --glass-bg: rgba(255, 255, 255, 0.08);
+        --glass-bg-hover: rgba(255, 255, 255, 0.14);
+        --glass-border: rgba(255, 255, 255, 0.18);
+        --glass-border-focus: rgba(0, 198, 255, 0.5);
+        --text-main: #ffffff;
+        --text-muted: rgba(255, 255, 255, 0.7);
+        --accent-gradient: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
+        --accent-glow: 0 0 20px rgba(0, 198, 255, 0.4);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: radial-gradient(circle at 20% 20%, #1e1b4b 0%, #0f172a 60%, #090d16 100%);
+        color: var(--text-main);
+        height: 100vh;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        overflow: hidden;
+      }
+
+      /* Ambient Background Orbs */
+      .bg-orb {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(60px);
+        z-index: 0;
+        pointer-events: none;
+      }
+      .orb-1 { width: 220px; height: 220px; background: rgba(0, 198, 255, 0.22); top: -20px; left: -20px; }
+      .orb-2 { width: 260px; height: 260px; background: rgba(118, 75, 162, 0.28); bottom: -40px; right: -30px; }
+
+      /* Main Glass Container */
+      .glass-container {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        max-width: 580px;
+        height: 100%;
+        background: var(--glass-bg);
+        backdrop-filter: blur(16px) saturate(180%);
+        -webkit-backdrop-filter: blur(16px) saturate(180%);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        padding: 16px 20px;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.37);
+        display: flex;
+        flex-direction: column;
+      }
+
+      .header-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        flex-shrink: 0;
+      }
+
+      h2 {
+        font-size: 1.2rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        background: linear-gradient(135deg, #ffffff 0%, rgba(255,255,255,0.7) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .select-all-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        cursor: pointer;
+        user-select: none;
+      }
+
+      /* Dynamically Expanding Members List */
+      .members-list {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding-right: 4px;
+      }
+
+      .members-list::-webkit-scrollbar {
+        width: 6px;
+      }
+      .members-list::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+      }
+      .members-list::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+      }
+
+      /* Member Card */
+      .member-card {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        padding: 8px 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        transition: background 0.2s ease;
+      }
+
+      .member-card:hover {
+        background: var(--glass-bg-hover);
+      }
+
+      .member-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        flex: 1;
+      }
+
+      .member-name {
+        font-weight: 600;
+        font-size: 0.88rem;
+        color: var(--text-main);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .member-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        white-space: nowrap;
+      }
+
+      .member-end-date {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        font-weight: 400;
+      }
+
+      .member-end-date.expired-date {
+        color: #f87171;
+        font-weight: 600;
+      }
+
+      /* Status Badges */
+      .status-badge {
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: capitalize;
+        white-space: nowrap;
+      }
+
+      .badge-full {
+        background: rgba(16, 185, 129, 0.2);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, 0.4);
+      }
+
+      .badge-expired {
+        background: rgba(245, 158, 11, 0.2);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.4);
+      }
+
+      .badge-affiliate {
+        background: rgba(59, 130, 246, 0.2);
+        color: #60a5fa;
+        border: 1px solid rgba(59, 130, 246, 0.4);
+      }
+
+      .badge-admin {
+        background: rgba(107, 114, 128, 0.25);
+        color: #9ca3af;
+        border: 1px solid rgba(107, 114, 128, 0.4);
+      }
+
+      .badge-terminated {
+        background: rgba(239, 68, 68, 0.2);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.4);
+      }
+
+      .badge-default {
+        background: rgba(255, 255, 255, 0.1);
+        color: var(--text-muted);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      /* Checkbox Styling */
+      .paid-checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--text-main);
+        cursor: pointer;
+        user-select: none;
+      }
+
+      input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: #00c6ff;
+        cursor: pointer;
+      }
+
+      /* Submit Button */
+      button {
+        width: 100%;
+        margin-top: 12px;
+        padding: 11px 20px;
+        border: none;
+        border-radius: 10px;
+        background: var(--accent-gradient);
+        color: #ffffff;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: var(--accent-glow);
+        flex-shrink: 0;
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 0 25px rgba(0, 198, 255, 0.6);
+        filter: brightness(1.1);
+      }
+
+      button:disabled {
+        background: rgba(255, 255, 255, 0.1);
+        color: var(--text-muted);
+        box-shadow: none;
+        cursor: not-allowed;
+      }
+
+      .loading-state {
+        text-align: center;
+        padding: 20px;
+        color: var(--text-muted);
+        font-size: 0.88rem;
+      }
+
+      /* Status Overlay */
+      .status-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.88);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 16px;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 24px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.35s ease-in-out;
+      }
+
+      .status-overlay.visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .overlay-content {
+        width: 100%;
+        max-width: 360px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .overlay-title {
+        font-size: 1.15rem;
+        font-weight: 600;
+        text-align: center;
+        color: var(--text-main);
+      }
+
+      .step-list {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .step-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        transition: color 0.3s ease;
+      }
+
+      .step-item.active {
+        color: var(--text-main);
+        font-weight: 500;
+      }
+
+      .step-item.completed {
+        color: #34d399;
+        font-weight: 500;
+      }
+
+      .step-icon {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        flex-shrink: 0;
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        transition: all 0.3s ease;
+      }
+
+      .step-item.active .step-icon {
+        border: 2px solid rgba(0, 198, 255, 0.3);
+        border-top-color: #00c6ff;
+        animation: spin 0.8s linear infinite;
+      }
+
+      .step-item.completed .step-icon {
+        border-color: #34d399;
+        background: rgba(16, 185, 129, 0.2);
+        color: #34d399;
+        animation: none;
+      }
+
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+
+      .final-success-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 12px;
+        animation: fadeIn 0.4s ease-out;
+      }
+
+      .success-checkmark {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        background: rgba(16, 185, 129, 0.2);
+        border: 2px solid #34d399;
+        color: #34d399;
+        font-size: 1.8rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 0 20px rgba(52, 211, 153, 0.3);
+      }
+
+      .success-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--text-main);
+      }
+
+      .success-subtext {
+        font-size: 0.88rem;
+        color: var(--text-muted);
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: scale(0.95); }
+        to { opacity: 1; transform: scale(1); }
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- Ambient Background Orbs -->
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+
+    <!-- Main Glass Container -->
+    <div class="glass-container">
+      
+      <!-- STATUS OVERLAY LAYER -->
+      <div id="statusOverlay" class="status-overlay">
+        <div class="overlay-content">
+          <div id="overlayHeader" class="overlay-title">Updating Member Status</div>
+          
+          <div id="stepList" class="step-list">
+            <div id="step1" class="step-item pending">
+              <span class="step-icon"></span>
+              <span>Preparing selected members...</span>
+            </div>
+            <div id="step2" class="step-item pending">
+              <span class="step-icon"></span>
+              <span>Updating spreadsheet records...</span>
+            </div>
+            <div id="step3" class="step-item pending">
+              <span class="step-icon"></span>
+              <span>Finalizing payment status...</span>
+            </div>
+          </div>
+
+          <!-- Final Completion Message -->
+          <div id="finalSuccess" class="final-success-container" style="display: none;">
+            <div class="success-checkmark">✓</div>
+            <div class="success-title">Thank you!</div>
+            <div class="success-subtext">Members have been updated successfully.</div>
+            <button onclick="google.script.host.close()" style="margin-top: 8px;">Close Window</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- HEADER BAR -->
+      <div class="header-bar">
+        <h2>Members Payment Status</h2>
+        <label class="select-all-container">
+          <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
+          <span>Select All</span>
+        </label>
+      </div>
+
+      <!-- MEMBERS SCROLLABLE LIST -->
+      <div id="membersList" class="members-list">
+        <div class="loading-state">Loading members...</div>
+      </div>
+
+      <!-- BULK ACTION BUTTON -->
+      <button id="submitBtn" onclick="submitBatchPaid()" disabled>Save Member Statuses</button>
+    </div>
+
+    <script>
+      let membersData = [];
+
+      window.onload = function() {
+        google.script.run
+          .withSuccessHandler((members) => {
+            console.log("Received members from server:", members);
+            renderMembersList(members);
+          })
+          .withFailureHandler(handleError)
+          .getMembersForPaidList();
+      };
+
+      function isExpiredBeforeAug14(dateStr) {
+        if (!dateStr || typeof dateStr !== 'string' || dateStr.length < 10) return false;
+
+        let isoDate = dateStr;
+
+        if (dateStr.includes('/')) {
+          const parts = dateStr.split('/');
+          if (parts.length === 3) {
+            const d = parts[0].padStart(2, '0');
+            const m = parts[1].padStart(2, '0');
+            const y = parts[2];
+            isoDate = `${y}-${m}-${d}`;
+          }
+        }
+
+        const currentYear = new Date().getFullYear();
+        const cutoffStr = `${currentYear}-08-14`;
+
+        return isoDate < cutoffStr;
+      }
+
+      function renderMembersList(members) {
+        try {
+          membersData = members || [];
+          const container = document.getElementById('membersList');
+          container.innerHTML = '';
+
+          if (!membersData || membersData.length === 0) {
+            container.innerHTML = '<div class="loading-state">No members found.</div>';
+            return;
+          }
+
+          membersData.forEach(member => {
+            const card = document.createElement('div');
+            card.className = 'member-card';
+
+            const badgeClass = getBadgeClass(member.membershipType);
+            const isRed = isExpiredBeforeAug14(member.endDate);
+            const endDateClass = isRed ? 'member-end-date expired-date' : 'member-end-date';
+
+            card.innerHTML = `
+              <div class="member-left">
+                <span class="member-name" title="${escapeHtml(member.name)}">${escapeHtml(member.name)}</span>
+                <span class="status-badge ${badgeClass}">${escapeHtml(member.membershipType)}</span>
+              </div>
+
+              <div class="member-right">
+                <span class="${endDateClass}">${escapeHtml(member.endDate || 'N/A')}</span>
+                <label class="paid-checkbox-label">
+                  <span>Paid?</span>
+                  <input type="checkbox" 
+                         class="member-paid-chk" 
+                         data-row="${member.row}" 
+                         data-initial="${member.isPaid ? 'true' : 'false'}"
+                         ${member.isPaid ? 'checked' : ''} 
+                         onchange="validateForm()">
+                </label>
+              </div>
+            `;
+
+            container.appendChild(card);
+          });
+
+          validateForm();
+        } catch (err) {
+          console.error("Error rendering members list:", err);
+          document.getElementById('membersList').innerHTML = `<div class="loading-state">Render Error: ${escapeHtml(err.message)}</div>`;
+        }
+      }
+
+      function getBadgeClass(status) {
+        if (!status) return 'badge-default';
+        const str = String(status).trim().toLowerCase();
+
+        if (str.includes('expired')) return 'badge-expired';
+        if (str.includes('full')) return 'badge-full';
+        if (str.includes('affiliate')) return 'badge-affiliate';
+        if (str.includes('admin')) return 'badge-admin';
+        if (str.includes('terminated')) return 'badge-terminated';
+
+        return 'badge-default';
+      }
+
+      function toggleSelectAll(selectAllChk) {
+        const checkboxes = document.querySelectorAll('.member-paid-chk');
+        checkboxes.forEach(chk => {
+          chk.checked = selectAllChk.checked;
+        });
+        validateForm();
+      }
+
+      function validateForm() {
+        const checkboxes = document.querySelectorAll('.member-paid-chk');
+        let modifiedCount = 0;
+
+        checkboxes.forEach(chk => {
+          const initial = chk.getAttribute('data-initial') === 'true';
+          if (chk.checked !== initial) {
+            modifiedCount++;
+          }
+        });
+
+        const submitBtn = document.getElementById('submitBtn');
+        if (modifiedCount > 0) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = `Save Changes (${modifiedCount} modified)`;
+        } else {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Save Member Statuses';
+        }
+      }
+
+      /* Detects all modified check states (checked AND unchecked) */
+      function submitBatchPaid() {
+        const checkboxes = document.querySelectorAll('.member-paid-chk');
+        const memberUpdates = [];
+
+        checkboxes.forEach(chk => {
+          const initial = chk.getAttribute('data-initial') === 'true';
+          // Send all items that have been modified
+          if (chk.checked !== initial) {
+            memberUpdates.push({
+              row: parseInt(chk.getAttribute('data-row'), 10),
+              isPaid: chk.checked
+            });
+          }
+        });
+
+        if (memberUpdates.length === 0) return;
+
+        // Show Glass Overlay
+        document.getElementById('statusOverlay').classList.add('visible');
+
+        // Step 1: Active
+        setStepState('step1', 'active');
+
+        setTimeout(() => {
+          // Complete Step 1 & Start Step 2
+          setStepState('step1', 'completed');
+          setStepState('step2', 'active');
+
+          // Trigger server update with modifications payload
+          google.script.run
+            .withSuccessHandler((updatedCount) => {
+              // Complete Step 2 & Start Step 3
+              setStepState('step2', 'completed');
+              setStepState('step3', 'active');
+
+              setTimeout(() => {
+                // Complete Step 3
+                setStepState('step3', 'completed');
+
+                setTimeout(() => {
+                  // Transition to Final Success Screen
+                  document.getElementById('stepList').style.display = 'none';
+                  document.getElementById('overlayHeader').style.display = 'none';
+                  document.getElementById('finalSuccess').style.display = 'flex';
+                }, 400);
+              }, 400);
+            })
+            .withFailureHandler((err) => {
+              alert("Error updating members: " + err.message);
+              document.getElementById('statusOverlay').classList.remove('visible');
+              resetSteps();
+            })
+            .updatePaidMembersBatch(memberUpdates);
+        }, 500);
+      }
+
+      function setStepState(stepId, state) {
+        const el = document.getElementById(stepId);
+        if (!el) return;
+
+        el.className = `step-item ${state}`;
+        const iconSpan = el.querySelector('.step-icon');
+
+        if (state === 'completed') {
+          iconSpan.innerHTML = '✓';
+        } else {
+          iconSpan.innerHTML = '';
+        }
+      }
+
+      function resetSteps() {
+        ['step1', 'step2', 'step3'].forEach(id => setStepState(id, 'pending'));
+        document.getElementById('stepList').style.display = 'flex';
+        document.getElementById('overlayHeader').style.display = 'block';
+        document.getElementById('finalSuccess').style.display = 'none';
+      }
+
+      function handleError(err) {
+        document.getElementById('membersList').innerHTML = `<div class="loading-state">Error: ${escapeHtml(err.message)}</div>`;
+      }
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+    </script>
+  </body>
+</html>

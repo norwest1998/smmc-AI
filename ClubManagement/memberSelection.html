@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      :root {
+        --glass-bg: rgba(255, 255, 255, 0.08);
+        --glass-bg-hover: rgba(255, 255, 255, 0.14);
+        --glass-border: rgba(255, 255, 255, 0.18);
+        --glass-border-focus: rgba(0, 198, 255, 0.5);
+        --text-main: #ffffff;
+        --text-muted: rgba(255, 255, 255, 0.7);
+        --accent-gradient: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
+        --accent-glow: 0 0 20px rgba(0, 198, 255, 0.4);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: radial-gradient(circle at 20% 20%, #1e1b4b 0%, #0f172a 60%, #090d16 100%);
+        color: var(--text-main);
+        min-height: 100vh;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        justify-content: top;
+        align-items: center;
+        overflow: hidden;
+      }
+
+      /* Ambient Liquid Glow Orbs in Background */
+      .bg-orb {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(60px);
+        z-index: 0;
+        pointer-events: none;
+      }
+      .orb-1 { width: 180px; height: 180px; background: rgba(0, 198, 255, 0.25); top: -20px; left: -20px; }
+      .orb-2 { width: 220px; height: 220px; background: rgba(118, 75, 162, 0.3); bottom: -40px; right: -30px; }
+
+      /* Main Glass Container */
+      .glass-container {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        max-width: 420px;
+        background: var(--glass-bg);
+        backdrop-filter: blur(16px) saturate(180%);
+        -webkit-backdrop-filter: blur(16px) saturate(180%);
+        border: 1px solid var(--glass-border);
+        border-radius: 20px;
+        padding: 24px;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.37);
+      }
+
+      h2 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 20px;
+        letter-spacing: -0.02em;
+        background: linear-gradient(135deg, #ffffff 0%, rgba(255,255,255,0.7) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .form-group {
+        margin-bottom: 18px;
+      }
+
+      label.form-label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      /* Glass Select Control */
+      select {
+        width: 100%;
+        padding: 12px 16px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--glass-border);
+        color: var(--text-main);
+        font-size: 0.95rem;
+        outline: none;
+        backdrop-filter: blur(8px);
+        transition: all 0.3s ease;
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: right 14px center;
+        background-size: 16px;
+      }
+
+      select:focus {
+        border-color: var(--glass-border-focus);
+        box-shadow: 0 0 12px rgba(0, 198, 255, 0.3);
+        background-color: rgba(255, 255, 255, 0.12);
+      }
+
+      select option {
+        background-color: #0f172a;
+        color: #ffffff;
+        padding: 10px;
+      }
+
+      /* Nested Preview Glass Card */
+      .card {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 14px;
+        padding: 16px;
+        margin-top: 18px;
+        animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      .card p {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .card p:last-of-type {
+        margin-bottom: 12px;
+      }
+
+      .card strong {
+        color: var(--text-main);
+      }
+
+      /* Checkbox Group Styling */
+      .checkbox-group {
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.9rem;
+        color: var(--text-main);
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .checkbox-label input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: #00c6ff;
+        cursor: pointer;
+      }
+
+      /* Liquid Glass Action Button */
+      button {
+        width: 100%;
+        margin-top: 20px;
+        padding: 12px 20px;
+        border: none;
+        border-radius: 12px;
+        background: var(--accent-gradient);
+        color: #ffffff;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: var(--accent-glow);
+        position: relative;
+        overflow: hidden;
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 0 25px rgba(0, 198, 255, 0.6);
+        filter: brightness(1.1);
+      }
+
+      button:active:not(:disabled) {
+        transform: translateY(0);
+      }
+
+      button:disabled {
+        background: rgba(255, 255, 255, 0.1);
+        color: var(--text-muted);
+        box-shadow: none;
+        cursor: not-allowed;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- Liquid Background Elements -->
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+
+    <!-- Main Glass Dialog -->
+    <div class="glass-container">
+      <h2>Select Member</h2>
+
+      <div class="form-group">
+        <label for="memberSelect" class="form-label">SMMC Members</label>
+        <select id="memberSelect" onchange="handleSelectionChange()">
+          <option value="" disabled selected>Loading members...</option>
+        </select>
+      </div>
+
+      <!-- Preview Details Card -->
+      <div id="previewCard" class="card hidden">
+        <p><span>Member ID</span> <strong id="displayId"></strong></p>
+        <p><span>Name</span> <strong id="displayName"></strong></p>
+        <p><span>Email</span> <strong id="displayEmail"></strong></p>
+        
+        <div class="checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="chkMarkPaid" onchange="validateForm()">
+            <span>Mark as paid</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="chkSendUpdate" onchange="validateForm()">
+            <span>Send update request</span>
+          </label>
+        </div>
+
+        <button id="submitBtn" onclick="submitActions()" disabled>Submit</button>
+      </div>
+    </div>
+
+    <script>
+      let membersCache = [];
+      let selectedMember = null;
+
+      window.onload = function() {
+        google.script.run
+          .withSuccessHandler(populateDropdown)
+          .withFailureHandler(handleError)
+          .getMembers("full");
+      };
+
+      function populateDropdown(members) {
+        membersCache = members;
+        const select = document.getElementById('memberSelect');
+        select.innerHTML = '<option value="" disabled selected>-- Select a Member --</option>';
+
+        if (!members || members.length === 0) {
+          select.innerHTML = '<option value="" disabled>No active members found</option>';
+          return;
+        }
+
+        members.forEach((member, index) => {
+          const option = document.createElement('option');
+          option.value = index;
+          option.textContent = `${member.name} (${member.email})`;
+          select.appendChild(option);
+        });
+      }
+
+      function handleSelectionChange() {
+        const select = document.getElementById('memberSelect');
+        selectedMember = membersCache[select.value];
+
+        if (selectedMember) {
+          document.getElementById('displayId').textContent = selectedMember.id;
+          document.getElementById('displayName').textContent = selectedMember.name;
+          document.getElementById('displayEmail').textContent = selectedMember.email;
+          document.getElementById('previewCard').classList.remove('hidden');
+        } else {
+          document.getElementById('previewCard').classList.add('hidden');
+        }
+
+        validateForm();
+      }
+
+      function validateForm() {
+        const btn = document.getElementById('submitBtn');
+        const isPaidChecked = document.getElementById('chkMarkPaid').checked;
+        const isSendChecked = document.getElementById('chkSendUpdate').checked;
+
+        // Button is only enabled if a member is selected AND at least one checkbox is checked
+        if (selectedMember && (isPaidChecked || isSendChecked)) {
+          btn.disabled = false;
+        } else {
+          btn.disabled = true;
+        }
+      }
+
+      // Helper function to turn google.script.run into a Promise
+      function runScript(funcName, ...args) {
+        return new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(reject)[funcName](...args);
+        });
+      }
+
+      async function submitActions() {
+        if (!selectedMember) return;
+
+        const isPaidChecked = document.getElementById('chkMarkPaid').checked;
+        const isSendChecked = document.getElementById('chkSendUpdate').checked;
+
+        if (!isPaidChecked && !isSendChecked) return;
+
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.textContent = "Processing Request...";
+
+        try {
+          const tasks = [];
+
+          if (isPaidChecked) {
+            tasks.push(runScript('markPaid', selectedMember.row, true));
+          }
+
+          if (isSendChecked) {
+            tasks.push(runScript('processEmailRequest', selectedMember));
+          }
+
+          await Promise.all(tasks);
+
+          alert("Action(s) completed successfully!");
+          google.script.host.close();
+        } catch (err) {
+          alert("Error: " + err.message);
+          btn.textContent = "Submit";
+          validateForm();
+        }
+      }
+
+      function handleError(err) {
+        alert("Failed to load members: " + err.message);
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body { 
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0b1d3a 0%, #1a365d 50%, #0d253f 100%);
+      background-attachment: fixed;
+      color: #ffffff;
+      padding: 40px 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Ambient background depth lights */
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(100px);
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 400px;
+      height: 400px;
+      background: rgba(0, 198, 255, 0.3);
+      top: 5%;
+      left: 10%;
+    }
+
+    body::after {
+      width: 450px;
+      height: 450px;
+      background: rgba(0, 114, 255, 0.25);
+      bottom: 5%;
+      right: 10%;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 850px;
+    }
+
+    .logo {
+      flex-shrink: 0;
+      width: 80px;
+      height: 80px;
+      object-fit: contain;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.16);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      box-shadow: 0 8px 24px rgba(2,12,24,0.3), inset 0 1px 0 rgba(255,255,255,0.4);
+      padding: 8px;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .page-header h2 { 
+      font-size: 1.7em;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+      text-shadow: 0 2px 12px rgba(0,0,0,0.25);
+      margin: 0 0 6px;
+    }
+
+    .page-header p { 
+      color: rgba(255, 255, 255, 0.8) !important;
+      font-size: 0.8rem;
+      line-height: 1.2;
+      margin: 0;
+    }
+
+    /* Liquid Glass Section Panels */
+    .glass-section {
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25), 
+                  inset 0 1px 1px rgba(255, 255, 255, 0.3);
+      border-radius: 28px;
+      padding: 30px;
+      margin-bottom: 30px;
+    }
+
+    .glass-section h3 { 
+      color: #ffffff !important; 
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      letter-spacing: -0.3px;
+    }
+
+    .grid-2-col {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+
+    @media (max-width: 640px) {
+      .grid-2-col {
+        grid-template-columns: 1fr;
+      }
+      .page-header {
+        flex-direction: column;
+        text-align: center;
+      }
+    }
+
+    .full-width {
+      grid-column: 1 / -1;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 10px;
+    }
+
+    .form-group label {
+      margin-bottom: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.85) !important;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Translucent Pill Inputs & Selects */
+    input[type="text"], 
+    input[type="email"], 
+    input[type="url"],
+    select { 
+      color: #ffffff !important; 
+      background: rgba(255, 255, 255, 0.15) !important;
+      border: 1px solid rgba(255, 255, 255, 0.25) !important;
+      border-radius: 50px !important;
+      padding: 12px 20px !important; 
+      font-size: 0.95rem;
+      font-family: inherit;
+      width: 100%;
+      box-sizing: border-box;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      transition: all 0.25s ease;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
+    select {
+      background-image: url("data:image/svg+xml;utf8,<svg fill='white' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>") !important;
+      background-repeat: no-repeat !important;
+      background-position: right 18px center !important;
+      padding-right: 45px !important;
+      cursor: pointer;
+    }
+
+    select option {
+      background-color: #0d253f;
+      color: #ffffff;
+    }
+
+    input:focus, select:focus { 
+      background-color: rgba(255, 255, 255, 0.25) !important;
+      border-color: rgba(255, 255, 255, 0.7) !important;
+      box-shadow: 0 0 15px rgba(0, 198, 255, 0.3), inset 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    /* Checkbox Pill Capsules */
+    .checkbox-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 10px 18px;
+      border-radius: 50px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.25s ease;
+      margin-top: 15px;
+      font-size: 0.88rem;
+    }
+
+    .checkbox-pill:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.4);
+    }
+
+    .checkbox-pill input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: #00c6ff;
+      cursor: pointer;
+    }
+
+    /* Glass Cards for Registered Boats */
+    .boat-card {
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      padding: 24px;
+      margin-bottom: 20px;
+      border-radius: 20px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .boat-pill-badge {
+      display: inline-block;
+      background: rgba(0, 198, 255, 0.2);
+      border: 1px solid rgba(0, 198, 255, 0.4);
+      color: #e0f7fc !important;
+      padding: 6px 16px;
+      border-radius: 50px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 18px;
+    }
+
+    /* New Boat Glass Card */
+    .add-boat-card {
+      background: rgba(0, 198, 255, 0.08);
+      border: 1px dashed rgba(0, 198, 255, 0.4);
+      border-radius: 20px;
+      padding: 24px;
+      margin-top: 20px;
+      transition: all 0.3s ease;
+    }
+
+    .add-boat-card h4 {
+      color: #00c6ff !important;
+      font-size: 1.1rem;
+      margin-bottom: 15px;
+    }
+
+    /* Buttons */
+    .btn-pill {
+      background: linear-gradient(135deg, rgba(0, 198, 255, 0.8), rgba(0, 114, 255, 0.8));
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      padding: 16px 32px;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 50px;
+      cursor: pointer;
+      width: 100%;
+      letter-spacing: 0.5px;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+      box-shadow: 0 8px 25px rgba(0, 114, 255, 0.3);
+      margin-top: 10px;
+    }
+
+    .btn-pill:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 30px rgba(0, 198, 255, 0.5);
+      background: linear-gradient(135deg, rgba(0, 198, 255, 0.95), rgba(0, 114, 255, 0.95));
+    }
+
+    .btn-secondary-pill {
+      background: rgba(255, 255, 255, 0.15);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      padding: 12px 24px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+
+    .btn-secondary-pill:hover {
+      background: rgba(0, 198, 255, 0.25);
+      border-color: rgba(0, 198, 255, 0.5);
+    }
+
+    .hidden { display: none !important; }
+
+    .success-msg { 
+      text-align: center; 
+      padding: 50px 20px; 
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 28px;
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    }
+
+    .success-msg h3 {
+      font-size: 1.8rem;
+      color: #00c6ff !important;
+      margin-bottom: 10px;
+    }
+
+    .success-msg p {
+      color: #ffffff !important;
+      font-size: 1.1rem;
+    }
+
+    /* Progress Overlay with Glassmorphic design */
+    .progress-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(7, 18, 38, 0.82);
+      backdrop-filter: blur(25px) saturate(180%);
+      -webkit-backdrop-filter: blur(25px) saturate(180%);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      transition: opacity 0.35s ease, visibility 0.35s;
+    }
+
+    .progress-card {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 28px;
+      padding: 35px 30px;
+      width: 100%;
+      max-width: 440px;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.3);
+      text-align: center;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(255, 255, 255, 0.15);
+      border-top-color: #00c6ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 20px auto;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .progress-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 20px;
+      letter-spacing: -0.2px;
+    }
+
+    .progress-steps {
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.92rem;
+      color: rgba(255, 255, 255, 0.4);
+      transition: all 0.3s ease;
+    }
+
+    .step-item.active {
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .step-item.completed {
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .step-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      flex-shrink: 0;
+      transition: all 0.3s ease;
+    }
+
+    .step-item.active .step-icon {
+      border-color: #00c6ff;
+      background: rgba(0, 198, 255, 0.2);
+      box-shadow: 0 0 12px rgba(0, 198, 255, 0.6);
+      color: #00c6ff;
+    }
+
+    .step-item.completed .step-icon {
+      border-color: #00e676;
+      background: rgba(0, 230, 118, 0.2);
+      color: #00e676;
+    }
+
+    /* Progress Modal Glassmorphism Overlay */
+    #progressModal {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.3s ease;
+    }
+    #progressModal.hidden {
+      display: none;
+    }
+
+    .progress-card {
+      background: #ffffff;
+      padding: 28px 32px;
+      border-radius: 16px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+      width: 100%;
+      max-width: 380px;
+    }
+
+    .progress-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .step-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.95rem;
+      color: #94a3b8; /* Pending step color */
+      transition: color 0.2s ease;
+    }
+
+    /* Active Executing Step */
+    .step-item.active {
+      color: #0f172a;
+      font-weight: 600;
+    }
+
+    /* Completed Step */
+    .step-item.completed {
+      color: #10b981;
+    }
+
+    .step-icon-box {
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* --- STEP ICON STATES --- */
+
+    /* Pending: Simple gray dot */
+    .step-dot {
+      width: 8px;
+      height: 8px;
+      background-color: #cbd5e1;
+      border-radius: 50%;
+    }
+
+    /* Executing: Small spinner directly in step position */
+    .step-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid #e2e8f0;
+      border-top-color: #2563eb; /* Primary action blue */
+      border-radius: 50%;
+      animation: stepSpin 0.75s linear infinite;
+    }
+
+    @keyframes stepSpin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Completed: Green Tick Mark */
+    .step-check {
+      color: #10b981;
+      font-size: 1.05rem;
+      font-weight: 800;
+    }
+
+    /* Layout header to position title left and pills right */
+    .profile-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+
+    .profile-header h3 {
+      margin-bottom: 0 !important;
+      line-height: 1;
+    }
+
+    /* Pills container aligned to the right */
+    .pills-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: flex-end;
+      align-items: center;
+    }
+
+    /* Base Pill Style */
+    .badge-pill {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 12px;
+      display: inline-block;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    /* Pill Color Variants */
+    .pill-membership {
+      background-color: #e2e8f0;
+      color: #334155;
+      border: 1px solid #cbd5e1;
+    }
+
+    .pill-financial {
+      background-color: #d1e7dd;
+      color: #0f5132;
+      border: 1px solid #badbcc;
+    }
+
+    .pill-non-financial {
+      background-color: #f8d7da;
+      color: #842029;
+      border: 1px solid #f5c2c7;
+    }
+
+    .pill-whatsapp {
+      background-color: #25d366;
+      color: #ffffff;
+    }
+
+    /* Accordion Boat Row Styles */
+    .boat-item-container {
+      margin-bottom: 14px;
+    }
+
+    .boat-summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 20px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 16px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      user-select: none;
+    }
+
+    .boat-summary-row:hover {
+      background: rgba(255, 255, 255, 0.16);
+      border-color: rgba(0, 198, 255, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .boat-summary-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.95rem;
+    }
+
+    .boat-num-badge {
+      background: rgba(0, 198, 255, 0.25);
+      border: 1px solid rgba(0, 198, 255, 0.5);
+      color: #00c6ff;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    .boat-summary-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mini-badge {
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 10px;
+    }
+
+    .mini-badge-active {
+      background: rgba(0, 230, 118, 0.2);
+      color: #00e676;
+      border: 1px solid rgba(0, 230, 118, 0.4);
+    }
+
+    .mini-badge-inactive {
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .mini-badge-gh {
+      background: rgba(255, 193, 7, 0.2);
+      color: #ffc107;
+      border: 1px solid rgba(255, 193, 7, 0.4);
+    }
+
+    .boat-arrow {
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.6);
+      transition: transform 0.3s ease;
+      margin-left: 6px;
+    }
+
+    .boat-arrow.open {
+      transform: rotate(180deg);
+    }
+
+    .boat-details-body {
+      background: rgba(0, 0, 0, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-top: none;
+      border-bottom-left-radius: 16px;
+      border-bottom-right-radius: 16px;
+      padding: 20px;
+      margin-top: -6px;
+      padding-top: 24px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Fullscreen Progress & Spinner Overlay -->
+  <div id="progressModal" class="hidden">
+    <div class="progress-card">
+      <div class="progress-title" id="progressTitle">Loading SMMC Portal</div>
+      <div class="step-list" id="progressStepList"></div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="page-header">
+      <!-- Direct image stream URL for Google Drive file -->
+      <img class="logo" src="https://lh3.googleusercontent.com/d/1jy49r9b2qUZbDY31PIhJPE2QmFngPRNg=w200?authuser=0" alt="Logo">
+      <div>
+        <h2>SMMC Member Information</h2>
+        <p>Please review your details below. Update any missing or incorrect information and click submit at the bottom when complete.</p>
+      </div>
+    </div>
+
+    <form id="updateForm" class="hidden">
+      <input type="hidden" name="hexCode" id="hexCode" value="<?= data.hexCode ?>">
+
+      <!-- Personal Profile Panel -->
+      <div class="glass-section">
+        <!-- Header with Title on Left & Pills Container on Right -->
+        <div class="profile-header">
+          <h3>Personal Profile</h3>
+          <div id="profilePills" class="pills-container"></div>
+        </div>
+        <div class="grid-2-col">
+          
+          <div class="form-group">
+            <label>Member Name</label>
+            <input type="text" id="m_MemberName" name="m_MemberName">
+          </div>
+
+          <div class="form-group">
+            <label>Phone</label>
+            <input type="text" id="m_Phone" name="m_Phone">
+          </div>
+
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="m_email" name="m_email">
+          </div>
+
+          <div class="form-group">
+            <label>Address Line</label>
+            <input type="text" id="m_AddressLine" name="m_Address Line">
+          </div>
+
+          <div class="form-group">
+            <label>Suburb</label>
+            <input type="text" id="m_Suburb" name="m_Suburb">
+          </div>
+
+          <div class="form-group">
+            <label>Post Code</label>
+            <input type="text" id="m_PCode" name="m_PCode">
+          </div>
+
+          <div class="form-group">
+            <label>Emergency Contact Name</label>
+            <input type="text" id="m_EmergencyName" name="m_Emergency Contact Name">
+          </div>
+
+          <div class="form-group">
+            <label>Emergency Contact Number</label>
+            <input type="text" id="m_EmergencyNumber" name="m_Emergency Contact Number">
+          </div>
+
+          <div class="form-group full-width" id="m_WhatsAppContainer">
+            <label class="checkbox-pill">
+              <input type="checkbox" id="m_WhatsApp" name="m_WhatsApp" value="true">
+              <span>Have you joined the WhatsApp community?</span>
+            </label>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Boats Panel -->
+      <div class="glass-section">
+        <h3>Registered Boats</h3>
+        <div id="boatsContainer"></div>
+
+        <button type="button" id="toggleNewBoatBtn" class="btn-secondary-pill" onclick="toggleNewBoatForm()">
+          ➕ Add Another Boat
+        </button>
+
+        <!-- New Boat Card -->
+        <div id="newBoatCard" class="add-boat-card hidden">
+          <h4>Register New Boat</h4>
+          <div class="grid-2-col">
+            
+            <div class="form-group">
+              <label>Class</label>
+              <!-- Dynamic Dropdown populated from 'Classes' sheet -->
+              <select id="new_Class">
+                <option value="" disabled selected>Select Boat Class...</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Sail No</label>
+              <input type="text" id="new_SailNo" placeholder="e.g. 123456">
+            </div>
+
+            <div class="form-group">
+              <label>Model</label>
+              <input type="text" id="new_Model" placeholder="e.g. Standard">
+            </div>
+
+            <div class="form-group">
+              <label>Hull Registration Number</label>
+              <input type="text" id="new_HRN" placeholder="e.g. HRN-9988">
+            </div>
+
+            <div class="form-group full-width">
+              <label class="checkbox-pill">
+                <input type="checkbox" id="new_GH" value="true">
+                <span>Used in GH?</span>
+              </label>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <button type="button" id="saveNewBoatBtn" class="btn-secondary-pill" style="background: rgba(0, 198, 255, 0.4);" onclick="submitNewBoat()">
+              Save New Boat
+            </button>
+            <button type="button" class="btn-secondary-pill" onclick="toggleNewBoatForm()">
+              Cancel
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <button type="button" id="submitBtn" class="btn-pill" onclick="submitForm()">Save & Update All Details</button>
+    </form>
+
+    <div id="statusMessage" class="hidden"></div>
+  </div>
+
+  <script>
+    // Global State Cache
+    let availableClasses = [];
+
+    // --- Progress Controller Manager ---
+    const Progress = {
+      show: function(title, stepsList) {
+        const modal = document.getElementById('progressModal');
+        const titleEl = document.getElementById('progressTitle');
+        const listEl = document.getElementById('progressStepList');
+
+        if (titleEl) titleEl.innerText = title;
+
+        if (listEl) {
+          listEl.innerHTML = stepsList.map((step, idx) => `
+            <div id="p-step-${idx}" class="step-item ${idx === 0 ? 'active' : ''}">
+              <div class="step-icon-box" id="p-icon-${idx}">
+                ${idx === 0 ? '<div class="step-spinner"></div>' : '<div class="step-dot"></div>'}
+              </div>
+              <span>${step}</span>
+            </div>
+          `).join('');
+        }
+
+        if (modal) modal.classList.remove('hidden');
+      },
+
+      // Advances the step: tick parameter 1, shows spinner on parameter 2
+      tickStep: function(completedIdx, nextIdx) {
+        // 1. Mark completed step with checkmark
+        if (completedIdx !== undefined && completedIdx !== null) {
+          const compIcon = document.getElementById(`p-icon-${completedIdx}`);
+          const compItem = document.getElementById(`p-step-${completedIdx}`);
+          if (compIcon) compIcon.innerHTML = `<span class="step-check">✓</span>`;
+          if (compItem) {
+            compItem.classList.remove('active');
+            compItem.classList.add('completed');
+          }
+        }
+
+        // 2. Put spinner on next executing step
+        if (nextIdx !== undefined && nextIdx !== null) {
+          const nextIcon = document.getElementById(`p-icon-${nextIdx}`);
+          const nextItem = document.getElementById(`p-step-${nextIdx}`);
+          if (nextIcon) nextIcon.innerHTML = `<div class="step-spinner"></div>`;
+          if (nextItem) nextItem.classList.add('active');
+        }
+      },
+
+      hide: function(delay = 0) {
+        setTimeout(() => {
+          const modal = document.getElementById('progressModal');
+          if (modal) modal.classList.add('hidden');
+        }, delay);
+      }
+    };
+
+    // --- INITIALIZE PAGE LOAD ---
+    window.addEventListener('DOMContentLoaded', function() {
+      const initialSteps = [
+        "Validating security link",
+        "Loading Member data",
+        "Loading Boat Registry",
+        "Loading Sailboat classes",
+        "Rendering Page"
+      ];
+      
+      Progress.show("Loading SMMC Portal", initialSteps);
+
+      const hexCodeInput = document.getElementById('hexCode');
+      const hexCode = hexCodeInput ? hexCodeInput.value : '';
+
+      // Step 0 running... Step 0 finishes -> Step 1 starts spinning
+      setTimeout(() => Progress.tickStep(0, 1), 250);
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (!res || res.status === "Error") {
+            Progress.hide(0);
+            alert(res ? res.message : "Failed to load profile data.");
+            return;
+          }
+
+          // Step 1 finishes -> Step 2 starts spinning
+          Progress.tickStep(1, 2);
+
+          // Populate Personal Details
+          if (res.member) {
+            document.getElementById('m_MemberName').value = res.member['MemberName'] || '';
+            document.getElementById('m_Phone').value = res.member['Phone'] || '';
+            document.getElementById('m_email').value = res.member['email'] || '';
+            document.getElementById('m_AddressLine').value = res.member['Address Line'] || '';
+            document.getElementById('m_Suburb').value = res.member['Suburb'] || '';
+            document.getElementById('m_PCode').value = res.member['PCode'] || '';
+            document.getElementById('m_EmergencyName').value = res.member['Emergency Contact Name'] || '';
+            document.getElementById('m_EmergencyNumber').value = res.member['Emergency Contact Number'] || '';
+            
+            // Renders pills and sets/hides WhatsApp checkbox automatically
+            renderProfilePills(res.member);
+          }
+
+          // Step 2 finishes -> Step 3 starts spinning
+          Progress.tickStep(2, 3);
+
+          // Populate Sailboat Classes
+          availableClasses = res.classes || [];
+          if (typeof populateClassDropdown === "function") {
+            populateClassDropdown(availableClasses);
+          }
+
+          // Step 3 finishes -> Step 4 starts spinning
+          Progress.tickStep(3, 4);
+
+          // Render Registered Boats
+          if (typeof renderBoats === "function") {
+            renderBoats(res.boats);
+          }
+
+          // Step 4 finishes (All ticks complete)
+          Progress.tickStep(4, null);
+
+          // Show main update form & dismiss modal smoothly
+          const updateForm = document.getElementById('updateForm');
+          if (updateForm) updateForm.classList.remove('hidden');
+          
+          Progress.hide(400);
+        })
+        .withFailureHandler(function(err) {
+          Progress.hide(0);
+          alert("Error initializing page: " + (err.message || err));
+        })
+        .getInitialData(hexCode);
+    });
+
+    function renderProfilePills(member) {
+      if (!member) return;
+
+      const container = document.getElementById('profilePills');
+      const waContainer = document.getElementById('m_WhatsAppContainer');
+      const waInput = document.getElementById('m_WhatsApp');
+
+      // 1. Membership Type
+      const membership = member['Membershiptype'] || 'Member';
+
+      // 2. Financial Status Check
+      const isPaidUp = member['Paid up'] === true || 
+                      member['Paid up'] === "TRUE" || 
+                      member['Paid up'] === "Yes";
+
+      // 3. WhatsApp Status Check
+      const isWhatsApp = member['WhatsApp'] === true || 
+                        member['WhatsApp'] === "TRUE" || 
+                        member['WhatsApp'] === "Yes" ||
+                        member['WhatsApp'] === "true";
+
+      // --- TOGGLE CHECKBOX & CONTAINER VISIBILITY ---
+      if (waInput) waInput.checked = isWhatsApp;
+      
+      if (waContainer) {
+        if (isWhatsApp) {
+          // Hide checkbox row if already joined
+          waContainer.classList.add('hidden');
+        } else {
+          // Show checkbox row if not joined
+          waContainer.classList.remove('hidden');
+        }
+      }
+
+  // --- RENDER HEADER PILLS ---
+  if (container) {
+    container.innerHTML = `
+      <span class="badge-pill pill-membership">${escapeHtml(membership)}</span>
+      <span class="badge-pill ${isPaidUp ? 'pill-financial' : 'pill-non-financial'}">
+        ${isPaidUp ? 'Financial member' : 'Non Financial member'}
+      </span>
+      ${isWhatsApp ? '<span class="badge-pill pill-whatsapp">WhatsApp</span>' : ''}
+    `;
+  }
+}
+
+    function populateClassDropdown(classes) {
+      const select = document.getElementById('new_Class');
+      select.innerHTML = '<option value="" disabled selected>Select Boat Class...</option>';
+      
+      classes.forEach(c => {
+        // Extracts string if c is an object {code, name}, or uses c directly if string
+        const className = (typeof c === 'object' && c !== null) ? (c.name || c.className || c.code) : c;
+        
+        const opt = document.createElement('option');
+        opt.value = className;
+        opt.textContent = className;
+        select.appendChild(opt);
+      });
+    }
+
+    function toggleBoatCard(index) {
+      const details = document.getElementById(`boat-details-${index}`);
+      const arrow = document.getElementById(`boat-arrow-${index}`);
+      if (details) details.classList.toggle('hidden');
+      if (arrow) arrow.classList.toggle('open');
+    }
+
+    function renderBoats(boats) {
+      const container = document.getElementById('boatsContainer');
+      if (!boats || boats.length === 0) {
+        container.innerHTML = '<p style="color: rgba(255,255,255,0.7); margin-bottom: 15px;">No boats registered under your profile.</p>';
+        return;
+      }
+
+      let html = '';
+      boats.forEach((boat, i) => {
+        const isGH = (boat.GH == true || boat.GH == "Y" || boat.GH == "true");
+        const isActive = (boat.Active == true || boat.Active == "Yes" || boat.Active == "true");
+
+        const isGHChecked = isGH ? 'checked' : '';
+        const isActiveChecked = isActive ? 'checked' : '';
+
+        const classDisplay = boat.Class || 'Unclassed';
+        const sailNoDisplay = boat.SailNo ? `${boat.SailNo}` : '';
+
+        html += `
+          <div class="boat-item-container">
+            <!-- Read-only Summary Bar -->
+            <div class="boat-summary-row" onclick="toggleBoatCard(${i})">
+              <div class="boat-summary-info">
+                <span class="boat-num-badge">Boat #${i + 1}</span>
+                <span><strong>${escapeHtml(classDisplay)}</strong> ${sailNoDisplay ? `&bull; ${escapeHtml(sailNoDisplay)}` : ''}</span>
+              </div>
+              <div class="boat-summary-status">
+                ${isGH ? '<span class="mini-badge mini-badge-gh">GH</span>' : ''}
+                <span class="mini-badge ${isActive ? 'mini-badge-active' : 'mini-badge-inactive'}">
+                  ${isActive ? 'Active' : 'Inactive'}
+                </span>
+                <span class="boat-arrow" id="boat-arrow-${i}">▼</span>
+              </div>
+            </div>
+
+            <!-- Collapsible Detail Form -->
+            <div id="boat-details-${i}" class="boat-details-body hidden">
+              <input type="hidden" name="b_row_${i}" value="${boat._rowNum}">
+              
+              <div class="grid-2-col">
+                <div class="form-group">
+                  <label>Class</label>
+                  <input type="text" name="b_Class_${i}" value="${escapeHtml(boat.Class || '')}">
+                </div>
+
+                <div class="form-group">
+                  <label>Sail No</label>
+                  <input type="text" name="b_SailNo_${i}" value="${escapeHtml(boat.SailNo || '')}">
+                </div>
+
+                <div class="form-group">
+                  <label>Model</label>
+                  <input type="text" name="b_Model_${i}" value="${escapeHtml(boat.Model || '')}">
+                </div>
+
+                <div class="form-group">
+                  <label>Hull Registration Number</label>
+                  <input type="text" name="b_HRN_${i}" value="${escapeHtml(boat.HRN || '')}">
+                </div>
+
+                <div class="form-group">
+                  <label class="checkbox-pill">
+                    <input type="checkbox" name="b_GH_${i}" value="true" ${isGHChecked}>
+                    <span>Used in GH?</span>
+                  </label>
+                </div>
+
+                <div class="form-group">
+                  <label class="checkbox-pill">
+                    <input type="checkbox" name="b_Active_${i}" value="true" ${isActiveChecked}>
+                    <span>Active Boat</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
+    function toggleNewBoatForm() {
+      const card = document.getElementById('newBoatCard');
+      const btn = document.getElementById('toggleNewBoatBtn');
+      if (card.classList.contains('hidden')) {
+        card.classList.remove('hidden');
+        btn.classList.add('hidden');
+      } else {
+        card.classList.add('hidden');
+        btn.classList.remove('hidden');
+      }
+    }
+
+    function submitNewBoat() {
+      const hexCode = document.getElementById('hexCode').value;
+      const classVal = document.getElementById('new_Class').value;
+      const sailNoVal = document.getElementById('new_SailNo').value;
+
+      if (!classVal && !sailNoVal) {
+        alert("Please select a Class or provide a Sail Number.");
+        return;
+      }
+
+      const boatSteps = [
+        "Validating boat details",
+        "Writing record to Boat Registry",
+        "Writing audit log entry",
+        "Refreshing Boat Registry"
+      ];
+
+      Progress.show("Adding New Boat", boatSteps);
+
+      const boatData = {
+        hexCode: hexCode,
+        new_Class: classVal,
+        new_SailNo: sailNoVal,
+        new_Model: document.getElementById('new_Model').value,
+        new_HRN: document.getElementById('new_HRN').value,
+        new_GH: document.getElementById('new_GH').checked
+      };
+
+      setTimeout(() => Progress.tickStep(0, 1), 250);
+
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if (response && response.status === "Success") {
+            Progress.tickStep(1, 2);
+            setTimeout(() => Progress.tickStep(2, 3), 150);
+
+            // Re-render boats list and update class list options
+            if (response.classes) populateClassDropdown(response.classes);
+            renderBoats(response.boats);
+
+            Progress.tickStep(3);
+
+            // Clear new boat form fields
+            document.getElementById('new_Class').value = '';
+            document.getElementById('new_SailNo').value = '';
+            document.getElementById('new_Model').value = '';
+            document.getElementById('new_HRN').value = '';
+            document.getElementById('new_GH').checked = false;
+
+            toggleNewBoatForm();
+            Progress.hide(400);
+          } else {
+            Progress.hide(0);
+            alert("Error adding boat: " + (response.message || response));
+          }
+        })
+        .withFailureHandler(function(err) {
+          Progress.hide(0);
+          alert("Server error adding boat: " + err);
+        })
+        .addNewBoat(boatData);
+    }
+
+    function submitForm() {
+      const form = document.getElementById('updateForm');
+      const statusDiv = document.getElementById('statusMessage');
+
+      const saveSteps = [
+        "Reading profile data",
+        "Validating form fields",
+        "Updating Member records",
+        "Updating Boat records",
+        "Recording audit log entry"
+      ];
+
+      Progress.show("Saving Member Profile", saveSteps);
+      
+      setTimeout(() => Progress.tickStep(0, 1), 200);
+      setTimeout(() => Progress.tickStep(1, 2), 400);
+
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if (response === "Success") {
+            Progress.tickStep(2, 3);
+            setTimeout(() => Progress.tickStep(3, 4), 200);
+            setTimeout(() => {
+              Progress.tickStep(4);
+              Progress.hide(400);
+              
+              form.classList.add('hidden');
+              statusDiv.className = "success-msg";
+              statusDiv.innerHTML = "<h3>Thank you!</h3><p>Your details have been successfully updated in the club records.</p>";
+            }, 400);
+          } else {
+            Progress.hide(0);
+            alert("Error running update: " + response);
+          }
+        })
+        .withFailureHandler(function(err) {
+          Progress.hide(0);
+          alert("A server error occurred: " + err);
+        })
+        .processForm(form);
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>
