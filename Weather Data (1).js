@@ -991,7 +991,10 @@ function createInfographic() {
 // FILE: Web Get.gs
 //======================================
 
-function doGet() {
+function doGet(e) {
+  const params = (e && e.parameter) || {};
+  
+  // Logic to get the forecast data
   const ss = SpreadsheetApp.getActive();
   const sheet = ss.getSheetByName("WZ Daily Forecast");
   const values = sheet.getRange(2, 1, 7, 11).getValues();
@@ -1005,7 +1008,7 @@ function doGet() {
     return {
       day: Utilities.formatDate(new Date(row[0]), Session.getScriptTimeZone(), "EEEE"),
       icon: getEmoji(code),
-      bg: getBackgroundImage(code), // Returns a valid Drive image URL
+      bg: getBackgroundImage(code), 
       min,
       max,
       minColor: getTempColor(min),
@@ -1017,9 +1020,15 @@ function doGet() {
     };
   });
 
+  // NEW: Handle JSON request for the website
+  if (params.action === 'data') {
+    return ContentService.createTextOutput(JSON.stringify({forecast: forecastData}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // DEFAULT: Keep the existing HTML display for direct viewing
   const template = HtmlService.createTemplateFromFile("index");
   template.data = forecastData;
-
   return template.evaluate().setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
