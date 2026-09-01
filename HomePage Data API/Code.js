@@ -179,9 +179,9 @@ function getMembersList_() {
     members.push({
       name:       name,
       membership: membershipCol !== -1 ? sanitizeCell_(row[membershipCol]) : '',
-      active:     activeCol     !== -1 ? sanitizeCell_(row[activeCol])     : '',
-      whatsapp:   waCol         !== -1 ? sanitizeCell_(row[waCol])         : '',
-      committee:  committeeCol  !== -1 ? sanitizeCell_(row[committeeCol])  : ''
+      active:     activeCol     !== -1 ? (row[activeCol] === true     || String(row[activeCol]).toLowerCase()     === 'true') : false,
+      whatsapp:   waCol         !== -1 ? (row[waCol] === true         || String(row[waCol]).toLowerCase()         === 'true') : false,
+      committee:  committeeCol  !== -1 ? (row[committeeCol] === true  || String(row[committeeCol]).toLowerCase()  === 'true') : false
     });
   }
 
