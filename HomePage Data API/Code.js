@@ -173,7 +173,7 @@ function getMembersList_() {
     if (commRaw === true || String(commRaw).trim().toUpperCase() === 'TRUE' ||
         String(commRaw).trim().toUpperCase() === 'YES' ||
         String(commRaw).trim().toUpperCase() === 'Y') {
-      commVal = 'Yes';
+      commVal = 'yes';
     }
 
     members.push({
