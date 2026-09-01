@@ -158,23 +158,14 @@ function getMembersList_() {
     var name = sanitizeCell_(row[nameCol]);
     if (!name) continue;
 
-    // Skip inactive members if Active column exists
+    /* Skip inactive members if Active column exists
     if (activeCol !== -1) {
       var active = row[activeCol];
       var isActive = (active === true ||
                       String(active).trim().toUpperCase() === 'TRUE' ||
                       String(active).trim().toLowerCase() === 'yes');
       if (!isActive) continue;
-    }
-
-    /* Committee: handle TRUE boolean, "TRUE" string, "Yes", "Y", or any non-empty value
-    var commRaw = committeeCol !== -1 ? row[committeeCol] : '';
-    var commVal = '';
-    if (commRaw === true || String(commRaw).trim().toUpperCase() === 'TRUE' ||
-        String(commRaw).trim().toUpperCase() === 'YES' ||
-        String(commRaw).trim().toUpperCase() === 'Y') {
-      commVal = 'yes';
-    }    */
+    } */
 
     members.push({
       name:       name,
