@@ -148,7 +148,7 @@ function getMembersList_() {
   var nameCol      = findHeader_(h, ['membername', 'name']);
   var membershipCol= findHeader_(h, ['membership', 'membershiptype', 'membertype']);
   var waCol        = findHeader_(h, ['whatsapp']);
-  var committeeCol = findHeader_(h, ['committee', 'commmittee']); // note: your sheet has a typo
+  var committeeCol = findHeader_(h, ['committee']); // note: your sheet has a typo
 
   var members = [];
   for (var r = 1; r < values.length; r++) {
