@@ -167,20 +167,21 @@ function getMembersList_() {
       if (!isActive) continue;
     }
 
-    // Committee: handle TRUE boolean, "TRUE" string, "Yes", "Y", or any non-empty value
+    /* Committee: handle TRUE boolean, "TRUE" string, "Yes", "Y", or any non-empty value
     var commRaw = committeeCol !== -1 ? row[committeeCol] : '';
     var commVal = '';
     if (commRaw === true || String(commRaw).trim().toUpperCase() === 'TRUE' ||
         String(commRaw).trim().toUpperCase() === 'YES' ||
         String(commRaw).trim().toUpperCase() === 'Y') {
       commVal = 'yes';
-    }
+    }    */
 
     members.push({
       name:       name,
       membership: membershipCol !== -1 ? sanitizeCell_(row[membershipCol]) : '',
+      active:     activeCol   !== -1 ? sanitizeCell_(row[activeCol])     : '',
       whatsapp:   waCol         !== -1 ? sanitizeCell_(row[waCol])         : '',
-      committee:  commVal
+      committee:  committeeCol !== -1 ? sanitizeCell_(row[committeeCol])  : ''
     });
   }
 
