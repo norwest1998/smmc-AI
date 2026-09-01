@@ -39,7 +39,11 @@ function doGet(e) {
   }
 
   if (rawToken.length < 6) {
-    return displayApplication(rawToken, action);
+    return displayApplication(rawToken);
+  }
+
+  if (action === 'display') {
+    return getApplication(rawToken);
   }
 
   // This checks to see if the token structure is valid

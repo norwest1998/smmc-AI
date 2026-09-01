@@ -58,14 +58,12 @@ function displayApplication(row, action) {
     lastUpdatedStr: lastUpdated.toLocaleDateString()
   };
 
-  if (!action) { 
-    var tmp = HtmlService.createTemplateFromFile('detailView');
-    tmp.details = appDetails;
-    
-    return tmp.evaluate()
-      .setTitle("Membership Application: " + appDetails.fullName)
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-  } else  {
-    return appDetails; 
-  }
+
+  var tmp = HtmlService.createTemplateFromFile('detailView');
+  tmp.details = appDetails;
+  
+  return tmp.evaluate()
+    .setTitle("Membership Application: " + appDetails.fullName)
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+
 }
