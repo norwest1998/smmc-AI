@@ -28,6 +28,10 @@
  *   ?ss=<spreadsheetId>&sheet=<name>           -> {meta, headers, rows}
  *       Legacy discovery contract kept for the Championship Standings
  *       module, so this single deployment can serve the whole page.
+ * 
+ *   ?action=membersList   → returns { members: [...] }
+ *   ?action=applicationsList → returns { applications: [...] }
+ * 
  * ============================================================================
  */
 
@@ -60,6 +64,8 @@ function doGet(e) {
   try {
     if (params.action === 'latestResults') return json_(getLatestResults());
     if (params.action === 'membershipStats') return json_(getMembershipStats());
+    if (params.action === 'membersList')      return json_(getMembersList_());
+    if (params.action === 'applicationsList') return json_(getApplicationsList_());
 
     // Legacy discovery contract (Championship Standings module)
     if (params.ss) {
@@ -120,6 +126,134 @@ function sanitizeCell_(value) {
   try { s = String(value); } catch (err) { s = ''; }
   if (/^cellimage$/i.test(s)) return '';
   return s.trim();
+}
+
+// ============================== MEMBERS LIST ==================================
+
+/**
+ * Returns active members with the fields needed by the Members panel.
+ * Source: Club Management "Members" sheet.
+ * Columns (0-based, matched by header): Active, MemberName, Membership,
+ *   WhatsApp, Committee
+ */
+function getMembersList_() {
+  var ss = openSpreadsheet_(HPAPI_CFG.clubManagementId, HPAPI_CFG.clubManagementName);
+  var sheet = ss.getSheetByName('Members');
+  if (!sheet) throw new Error('"Members" sheet not found in Club Management.');
+
+  var values = sheet.getDataRange().getValues();
+  var h = values[0];
+
+  var activeCol    = findHeader_(h, ['active']);
+  var nameCol      = findHeader_(h, ['membername', 'name']);
+  var membershipCol= findHeader_(h, ['membership', 'membershiptype', 'membertype']);
+  var waCol        = findHeader_(h, ['whatsapp']);
+  var committeeCol = findHeader_(h, ['committee', 'commmittee']); // note: your sheet has a typo
+
+  var members = [];
+  for (var r = 1; r < values.length; r++) {
+    var row = values[r];
+
+    // Skip blank rows
+    var name = sanitizeCell_(row[nameCol]);
+    if (!name) continue;
+
+    // Skip inactive members if Active column exists
+    if (activeCol !== -1) {
+      var active = row[activeCol];
+      var isActive = (active === true ||
+                      String(active).trim().toUpperCase() === 'TRUE' ||
+                      String(active).trim().toLowerCase() === 'yes');
+      if (!isActive) continue;
+    }
+
+    members.push({
+      name:       name,
+      membership: membershipCol !== -1 ? sanitizeCell_(row[membershipCol]) : '',
+      whatsapp:   waCol         !== -1 ? sanitizeCell_(row[waCol])         : '',
+      committee:  committeeCol  !== -1 ? sanitizeCell_(row[committeeCol])  : ''
+    });
+  }
+
+  // Sort alphabetically by name
+  members.sort(function(a, b) { return a.name.localeCompare(b.name); });
+
+  return { members: members };
+}
+
+// ============================ APPLICATIONS LIST ===============================
+
+/**
+ * Returns membership applications with the fields needed by the Applications panel.
+ * Source: Membership Applications sheet (same as getApplicationStats_).
+ * Fields: RowID, Status, Timestamp, First name, Surname, Membership Type,
+ *   Name of Current Club, Nominating member name, Seconders member name,
+ *   LastStatusUpdated
+ */
+function getApplicationsList_() {
+  var ss = SpreadsheetApp.openById(HPAPI_CFG.membershipAppsId);
+  var sheet = ss.getSheetByName(HPAPI_CFG.membershipSheetName || 'Membership Applications');
+  if (!sheet) throw new Error('"' + HPAPI_CFG.membershipSheetName + '" sheet not found.');
+
+  var values = sheet.getDataRange().getValues();
+
+  // Your sheet has headers on row 7 (index 6), data from row 8 (index 7)
+  var headerRowIdx = 6;
+  var dataStartIdx = (HPAPI_CFG.membershipDataStartRow || 8) - 1;
+  var h = values[headerRowIdx];
+  var tz = Session.getScriptTimeZone();
+
+  var rowIdCol       = findHeader_(h, ['rowid', 'id', 'row id']);
+  var statusCol      = findHeader_(h, ['status']);
+  var timestampCol   = findHeader_(h, ['timestamp', 'submitted', 'date']);
+  var firstNameCol   = findHeader_(h, ['firstname', 'first name', 'given name']);
+  var surnameCol     = findHeader_(h, ['surname', 'last name', 'family name']);
+  var memTypeCol     = findHeader_(h, ['membershiptype', 'membership type', 'membership']);
+  var clubCol        = findHeader_(h, ['nameofcurrentclub', 'current club', 'club']);
+  var nominatorCol   = findHeader_(h, ['nominatingmembername', 'nominator', 'nominating member name']);
+  var seconderCol    = findHeader_(h, ['secondersmembername', 'seconder', 'seconders member name']);
+  var lastUpdatedCol = findHeader_(h, ['laststatusupdated', 'last updated', 'updated']);
+
+  var applications = [];
+  for (var r = dataStartIdx; r < values.length; r++) {
+    var row = values[r];
+
+    // Skip blank rows (no name and no status)
+    var firstName = firstNameCol !== -1 ? sanitizeCell_(row[firstNameCol]) : '';
+    var surname   = surnameCol   !== -1 ? sanitizeCell_(row[surnameCol])   : '';
+    var status    = statusCol    !== -1 ? sanitizeCell_(row[statusCol])    : '';
+    if (!firstName && !surname && !status) continue;
+
+    // Format dates
+    var ts = timestampCol !== -1 ? row[timestampCol] : '';
+    var tsFormatted = (ts instanceof Date)
+      ? Utilities.formatDate(ts, tz, 'd MMM yyyy')
+      : sanitizeCell_(ts);
+
+    var lu = lastUpdatedCol !== -1 ? row[lastUpdatedCol] : '';
+    var luFormatted = (lu instanceof Date)
+      ? Utilities.formatDate(lu, tz, 'd MMM yyyy')
+      : sanitizeCell_(lu);
+
+    // RowID: use column value if present, otherwise use the sheet row number
+    var rowId = rowIdCol !== -1 ? sanitizeCell_(row[rowIdCol]) : '';
+    if (!rowId) rowId = 'ROW-' + (r + 1);
+
+    applications.push({
+      rowId:          rowId,
+      status:         status,
+      timestamp:      tsFormatted,
+      firstName:      firstName,
+      surname:        surname,
+      membershipType: memTypeCol   !== -1 ? sanitizeCell_(row[memTypeCol])   : '',
+      club:           clubCol      !== -1 ? sanitizeCell_(row[clubCol])       : '',
+      nominator:      nominatorCol !== -1 ? sanitizeCell_(row[nominatorCol]) : '',
+      seconder:       seconderCol  !== -1 ? sanitizeCell_(row[seconderCol])  : '',
+      lastUpdated:    luFormatted
+    });
+  }
+
+  return { applications: applications };
 }
 
 // ============================== LEGACY DISCOVERY ==============================
