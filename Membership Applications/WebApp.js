@@ -43,7 +43,9 @@ function doGet(e) {
   }
 
   if (action === 'display') {
-    return getApplication(rawToken);
+    const appDetails = getApplication(rawToken);
+    return ContentService.createTextOutput(JSON.stringify(appDetails))
+    .setMimeType(ContentService.MimeType.JSON);
   }
 
   // This checks to see if the token structure is valid
