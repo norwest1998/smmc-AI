@@ -179,9 +179,9 @@ function getMembersList_() {
     members.push({
       name:       name,
       membership: membershipCol !== -1 ? sanitizeCell_(row[membershipCol]) : '',
-      active:     activeCol   !== -1 ? sanitizeCell_(row[activeCol])     : '',
+      active:     activeCol     !== -1 ? sanitizeCell_(row[activeCol])     : '',
       whatsapp:   waCol         !== -1 ? sanitizeCell_(row[waCol])         : '',
-      committee:  committeeCol !== -1 ? sanitizeCell_(row[committeeCol])  : ''
+      committee:  committeeCol  !== -1 ? sanitizeCell_(row[committeeCol])  : ''
     });
   }
 
