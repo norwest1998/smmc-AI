@@ -1,12 +1,17 @@
 function doGet(e) {
   const hexCode = (e && e.parameter) ? (e.parameter.id || e.parameter.hexCode || e.parameter.code || "") : "";
+  const type = (e && e.parameter) ? (e.parameter.type || e.parameter.action || "") : "";
   
-  const template = HtmlService.createTemplateFromFile('Index');
-  template.data = { hexCode: hexCode };
-  
-  return template.evaluate()
-      .setTitle("SMMC Details Update")
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  if (type & type === "list"){
+    memberList()
+  } else {
+    const template = HtmlService.createTemplateFromFile('Index');
+    template.data = { hexCode: hexCode };
+    
+    return template.evaluate()
+        .setTitle("SMMC Details Update")
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
 }
 
 // MAIN FRONTEND API CALL
