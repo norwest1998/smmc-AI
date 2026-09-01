@@ -24,6 +24,7 @@ function doGet(e) {
   if (!e) return HtmlService.createHtmlOutput('Invalid service call.');
 
   let rawToken = e.parameter ? e.parameter.token : null;
+  let action = e.parameter ? e.parameter.action : null;
 
   // Default view: render public Membership Application Form
   if (!rawToken) {
@@ -38,7 +39,7 @@ function doGet(e) {
   }
 
   if (rawToken.length < 6) {
-    return displayApplication(rawToken);
+    return displayApplication(rawToken, action);
   }
 
   // This checks to see if the token structure is valid

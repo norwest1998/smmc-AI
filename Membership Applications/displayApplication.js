@@ -1,4 +1,4 @@
-function displayApplication(row) {
+function displayApplication(row, action) {
   console.log("In Display Application: " + row);
   var dataSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Membership Applications');
   var data = dataSheet.getRange(row, 1, 1, dataSheet.getLastColumn()).getValues()[0];
@@ -58,10 +58,14 @@ function displayApplication(row) {
     lastUpdatedStr: lastUpdated.toLocaleDateString()
   };
 
-  var tmp = HtmlService.createTemplateFromFile('detailView');
-  tmp.details = appDetails;
-  
-  return tmp.evaluate()
-    .setTitle("Membership Application: " + appDetails.fullName)
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  if (!action) { 
+    var tmp = HtmlService.createTemplateFromFile('detailView');
+    tmp.details = appDetails;
+    
+    return tmp.evaluate()
+      .setTitle("Membership Application: " + appDetails.fullName)
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  } else  {
+    return appDetails; 
+  }
 }
