@@ -1,4 +1,4 @@
-function displayApplication(rowId){
+function getApplication(rowId){
 
   var dataSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Membership Applications');
   var data = dataSheet.getRange().getValues();
@@ -11,10 +11,10 @@ function displayApplication(rowId){
       var today = new Date();
       var diffInTime = today.getTime() - lastUpdated.getTime();
       var diffInDays = diffInTime / (1000 * 3600 * 24);
-
-      var isUrgent = diffInDays >= 2;
-      var statusClass = isUrgent ? 'status-urgent' : 'status-normal';
-
+      if (data[i][1] !== "Processed" || data[i][1] === "Rejected") {
+        var isUrgent = diffInDays >= 2;
+        var statusClass = isUrgent ? 'status-urgent' : 'status-normal';
+      }
       var signed = data[i][19] > "";
       var disclaimer = signed ? "Yes" : "No";
 
