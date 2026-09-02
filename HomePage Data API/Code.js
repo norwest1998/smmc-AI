@@ -66,6 +66,7 @@ function doGet(e) {
     if (params.action === 'membershipStats') return json_(getMembershipStats());
     if (params.action === 'membersList')      return json_(getMembersList_());
     if (params.action === 'applicationsList') return json_(getApplicationsList_());
+    if (params.action === 'boatsList') return respond(getBoatsList());
 
     // Legacy discovery contract (Championship Standings module)
     if (params.ss) {
@@ -126,6 +127,30 @@ function sanitizeCell_(value) {
   try { s = String(value); } catch (err) { s = ''; }
   if (/^cellimage$/i.test(s)) return '';
   return s.trim();
+}
+
+
+
+function getBoatsList() {
+  const sheet = SpreadsheetApp.getActive().getSheetByName('ClassMembers');
+  const rows = sheet.getDataRange().getValues();
+  const headers = rows.shift();
+  const idx = h => headers.indexOf(h);
+  const boats = rows
+    .filter(r => r[idx('BoatID')] !== '')
+    .map(r => ({
+      boatId:   r[idx('BoatID')],
+      active:   !!r[idx('Active')],
+      member:   r[idx('Member')],
+      class:    r[idx('Class')],
+      sailNo:   r[idx('SailNo')],
+      model:    r[idx('Model')],
+      handicap: r[idx('Handicap')],
+      hrn:      r[idx('HRN')],
+      gh:       !!r[idx('GH')],
+      ghHcap:   r[idx('GH')] ? r[idx('GH HCap')] : null
+    }));
+  return { boats };
 }
 
 // ============================== MEMBERS LIST ==================================
