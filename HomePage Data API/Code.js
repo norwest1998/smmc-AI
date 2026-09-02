@@ -672,7 +672,7 @@ function getApplicationStats_() {
   };
 }
 
-/** Registered Boats - ClassMembers sheet grouped by ClassName. */
+/** Registered Boats - ClassMembers sheet grouped by ClassName, active boats only. */
 function getBoatStats_() {
   var ss = openSpreadsheet_(HPAPI_CFG.clubManagementId, HPAPI_CFG.clubManagementName);
   var sheet = ss.getSheetByName('ClassMembers');
@@ -682,7 +682,20 @@ function getBoatStats_() {
   var classCol = findHeader_(values[0], ['classname', 'class']);
   if (classCol === -1) classCol = 3; // ClassName is column D
 
-  var breakdown = countBy_(values, classCol, 1, 'Unclassified');
+  var activeCol = findHeader_(values[0], ['active']);
+  if (activeCol === -1) activeCol = 1; // Active is column B
+
+  function isActive_(v) {
+    return v === true || String(v).trim().toUpperCase() === 'TRUE' || String(v).trim() === 'Yes';
+  }
+
+  // Filter to active rows only, then reuse countBy_ on the filtered set.
+  var activeRows = [values[0]]; // keep header row so countBy_'s startRow=1 still works
+  for (var r = 1; r < values.length; r++) {
+    if (isActive_(values[r][activeCol])) activeRows.push(values[r]);
+  }
+
+  var breakdown = countBy_(activeRows, classCol, 1, 'Unclassified');
   return { total: sumCounts_(breakdown), sub: 'Across ' + breakdown.length + ' classes', breakdown: breakdown };
 }
 
