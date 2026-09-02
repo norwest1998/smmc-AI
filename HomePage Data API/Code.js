@@ -66,7 +66,7 @@ function doGet(e) {
     if (params.action === 'membershipStats') return json_(getMembershipStats());
     if (params.action === 'membersList')      return json_(getMembersList_());
     if (params.action === 'applicationsList') return json_(getApplicationsList_());
-    if (params.action === 'boatsList') return respond(getBoatsList());
+    if (params.action === 'boatsList') return json_(getBoatsList());
 
     // Legacy discovery contract (Championship Standings module)
     if (params.ss) {
@@ -132,7 +132,10 @@ function sanitizeCell_(value) {
 
 
 function getBoatsList() {
-  const sheet = SpreadsheetApp.getActive().getSheetByName('ClassMembers');
+  const ss = openSpreadsheet_(HPAPI_CFG.clubManagementId, HPAPI_CFG.clubManagementName);
+  const sheet = ss.getSheetByName('ClassMembers');
+  if (!sheet) throw new Error('"ClassMembers" sheet not found in Club Management.');
+
   const rows = sheet.getDataRange().getValues();
   const headers = rows.shift();
   const idx = h => headers.indexOf(h);
