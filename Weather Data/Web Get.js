@@ -10,7 +10,7 @@ function doGet(e) {
 
   const values = sheet.getRange(2, 1, 7, 9).getValues();
   const forecastData = values.map(row => {
-    const code = Math.round(row[1]);
+    const code = row[1] ? row[1] : "2";
     const min = Math.round(row[7]);
     const max = Math.round(row[8]);
     const uvIndex = Math.round(row[2]);
@@ -24,6 +24,7 @@ function doGet(e) {
       minColor: getTempColor(min),
       maxColor: getTempColor(max),
       wind: row[4] + " " + getWindArrow(row[6]),
+      windScale: getWindScale(row[4]),
       rain: (row[3] || 0) + " mm",
       uvColor: getUVColor(uvIndex),
       uvIndex: "UV " + uvIndex

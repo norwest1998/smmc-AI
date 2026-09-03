@@ -126,3 +126,17 @@ function getBackgroundImage(code) {
   return registry[code] || registry[0]; // fallback mandatory
 }
 
+function getWindScale(wind){
+  temp = parseFloat(wind);  // Ensure it's a number
+  if (wind > 47.52) return 'Storm';  
+  if (wind > 39.96) return 'Strong Gale';  
+  if (wind > 32.94) return 'Gale';  
+  if (wind > 26.46) return 'Near Gale';   
+  if (wind > 20.52) return 'Strong Breeze';
+  if (wind > 15.12) return 'Fresh Breeze';  
+  if (wind > 10.26) return 'Moderate Breeze';  
+  if (wind > 5.94) return 'Gentle Breeze';   
+  if (wind > 2.70) return 'Light Breeze';  
+  if (wind > 0.53) return 'Light Air'; 
+  return 'Calm';
+}
