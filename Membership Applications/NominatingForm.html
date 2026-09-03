@@ -306,19 +306,26 @@
       };
 
       google.script.run
-        .withSuccessHandler(function(response) {
+        .withSuccessHandler(res => {
           modal.classList.add('hidden');
-          document.getElementById('nominationForm').style.display = 'none';
-          const alert = document.getElementById('statusAlert');
-          alert.textContent = response;
-          alert.classList.remove('hidden');
+          if (res.success) {
+            showAlert(res.message, true);
+            document.getElementById('appForm').reset();
+
+            setTimeout(() => {
+              top.location.href = 'https://norwest1998.github.io/Home/#applications';
+            }, 1800);
+          } else {
+            showAlert('Submission failed: ' + res.message, false);
+          }
         })
-        .withFailureHandler(function(error) {
+        .withFailureHandler(err => {
           modal.classList.add('hidden');
-          alert('System Error: ' + error);
+          showAlert('System Error: ' + err, false);
         })
-        .handleNomination(params);
+        .submitApplication(formData);
     });
+
   </script>
 
 </body>
