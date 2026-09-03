@@ -449,6 +449,10 @@
           if (res.success) {
             showAlert(res.message, true);
             document.getElementById('appForm').reset();
+
+            setTimeout(() => {
+              top.location.href = 'https://norwest1998.github.io/Home/#applications';
+            }, 1800);
           } else {
             showAlert('Submission failed: ' + res.message, false);
           }
