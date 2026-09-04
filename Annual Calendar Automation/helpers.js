@@ -313,6 +313,32 @@ function getWindArrow(deg) {
   return "➡️";
 }
 
+/**
+ * Maps Open-Meteo style WMO weather codes to a short label + emoji icon.
+ * Extend this list if your data source uses codes not listed here.
+ */
+function getWeatherDescription(code) {
+  const map = {
+    0:  { label: 'Clear sky',            icon: '☀️' },
+    1:  { label: 'Mainly clear',         icon: '🌤️' },
+    2:  { label: 'Partly cloudy',        icon: '⛅' },
+    3:  { label: 'Overcast',             icon: '☁️' },
+    45: { label: 'Fog',                  icon: '🌫️' },
+    48: { label: 'Depositing rime fog',  icon: '🌫️' },
+    51: { label: 'Light drizzle',        icon: '🌦️' },
+    53: { label: 'Drizzle',              icon: '🌦️' },
+    55: { label: 'Dense drizzle',        icon: '🌧️' },
+    61: { label: 'Slight rain',          icon: '🌧️' },
+    63: { label: 'Rain',                 icon: '🌧️' },
+    65: { label: 'Heavy rain',           icon: '🌧️' },
+    71: { label: 'Slight snow',          icon: '🌨️' },
+    80: { label: 'Rain showers',         icon: '🌦️' },
+    95: { label: 'Thunderstorm',         icon: '⛈️' }
+  };
+
+  return map[code] || { label: 'Forecast', icon: '🌡️' };
+}
+
 function sheetToObjects(ss, sheetName, keys) {
   try {
     const sh = ss.getSheetByName(sheetName);
@@ -436,3 +462,88 @@ function getBackgroundImage(code) {
   return registry[code] || registry[0]; // fallback mandatory
 }
 
+/**
+ * Finds the row in "WZ Daily Forecast" matching raceDate and returns a
+ * rendered summary card, or null if no matching row / sheet is found.
+ *
+ * Expected columns (row[0]..row[8]):
+ *   Date, weather_code, uv_index_max, precipitation_sum,
+ *   wind_speed_10m_max, wind_speed_10m_mean, winddirection_10m_dominant,
+ *   temperature_2m_min, temperature_2m_max
+ */
+function buildDailySummaryHtml(dailyData, raceDate) {
+  if (!dailyData || dailyData.length < 2) return null;
+
+  const targetY = raceDate.getFullYear();
+  const targetM = raceDate.getMonth();
+  const targetD = raceDate.getDate();
+
+  for (let i = 1; i < dailyData.length; i++) {
+    const row = dailyData[i];
+    const rowDate = row[0];
+    if (!(rowDate instanceof Date)) continue;
+
+    const sameDay =
+      rowDate.getFullYear() === targetY &&
+      rowDate.getMonth() === targetM &&
+      rowDate.getDate() === targetD;
+
+    if (!sameDay) continue;
+
+    const weatherCode   = row[1];
+    const uvMax          = row[2] !== '' ? Math.round(row[2]) : null;
+    const rainSum        = row[3] || 0;
+    const windMax        = row[4];
+    const windMean       = row[5];
+    const windDir        = row[6];
+    const tempMin        = Math.round(row[7]);
+    const tempMax        = Math.round(row[8]);
+
+    const desc = getWeatherDescription(weatherCode);
+    const uvColor = uvMax !== null ? getUVColor(uvMax) : '#999';
+    const maxTempColor = getTempColor(tempMax);
+    const minTempColor = getTempColor(tempMin);
+    const windArrow = getWindArrow(windDir);
+
+    return `
+      <div class="weather-daily-card">
+        <div class="daily-icon">${desc.icon}</div>
+        <div class="daily-desc">${desc.label}</div>
+        <div class="daily-temps">
+          <span class="temp-min" style="color:${minTempColor};">${tempMin}°
+          </span> /
+          <span class="temp-max" style="color:${maxTempColor};"> ${tempMax}°</span>
+        </div>
+        <div class="daily-row">
+          <span class="wind">Wind ${windMean}–${windMax} kt ${windArrow}</span>
+        </div>
+        <div class="daily-row">
+          <span class="rain"> Rain ${rainSum} mm</span>
+          <span class="uvVal" style="color:${uvColor};">
+            ${uvMax !== null ? 'UV ' + uvMax : ''}
+          </span>
+        </div>
+      </div>
+    `;
+  }
+
+  return null; // no matching date found in the forecast sheet
+}
+
+function json(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+
+/**
+ * Injects a CSS string into an already-built HTML page.
+ * Wraps the CSS in <style> tags and inserts it just before </head>
+ */
+function injectStyle(html, css) {
+  const styleTag = `<style>${css}</style>`;
+  if (html.indexOf('</head>') !== -1) {
+    return html.replace('</head>', styleTag + '</head>');
+  }
+  return styleTag + html;
+}
