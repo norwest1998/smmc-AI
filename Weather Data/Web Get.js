@@ -10,7 +10,7 @@ function doGet(e) {
 
   const values = sheet.getRange(2, 1, 7, 9).getValues();
   const forecastData = values.map(row => {
-    const code = row[1] ? row[1] : "2";
+    const code = row[1] ? row[1] : "2";   // default to mostly clear
     const min = Math.round(row[7]);
     const max = Math.round(row[8]);
     const uvIndex = Math.round(row[2]);

@@ -116,7 +116,7 @@
   .day-name { font-size: 1rem; }
   .weather-icon { font-size: 3rem; line-height: 1; padding: 3px;}
   .temp-range { font-size: 0.9rem; font-weight: bold; }
-  .wind-info, .rain-mm, .uvIndex { font-size: 0.75rem; opacity: 0.9; line-height: 0.85; }
+  .wind-info, .wind-scale, .rain-mm, .uvIndex { font-size: 0.75rem; opacity: 0.9; line-height: 0.85; }
 </style>
 
 
@@ -141,7 +141,7 @@
                 <?= row.max ?>°
               </span>
             </div>
-            <div class="wind-info"><?= row.wind ?></div>
+            <div class="wind-info"><?= row.wind ?></div>           
             <div class="rain-mm"><?= row.rain ?></div>
             <div class="uvIndex">
               <span class="uvIndex" style="color: <?= row.uvColor ?>;">
