@@ -1,3 +1,114 @@
+function getClassImageMap_() {
+  const imageMap = {};
+ 
+  try {
+    const props  = PropertiesService.getScriptProperties();
+    const ssId   = props.getProperty('ClubManagementSSID');
+    if (!ssId) {
+      Logger.log('ClubManagementSSID not set in Script Properties');
+      return imageMap;
+    }
+ 
+    const clubSS     = SpreadsheetApp.openById(ssId);
+    const classSheet = clubSS.getSheetByName('Classes');
+    if (!classSheet) {
+      Logger.log('Classes sheet not found in Club Management spreadsheet');
+      return imageMap;
+    }
+ 
+    const data = classSheet.getDataRange().getValues();
+ 
+    for (let r = 1; r < data.length; r++) {
+      const row       = data[r];
+      const className = String(row[1]).trim();   // Col B  ClassName
+      const fileId    = String(row[5]).trim();   // Col F  Insignia (Drive FileID)
+ 
+      if (!className || !fileId || fileId === 'undefined') continue;
+ 
+      // Drive thumbnail URL — sz=s128 gives 128px; adjust as needed (s64, s256, etc.)
+      imageMap[className] = 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=s128';
+    }
+  } catch (err) {
+    Logger.log('getClassImageMap_ error: ' + err.message);
+  }
+ 
+  return imageMap;
+}
+ 
+/**
+ * Builds a map of { hexKey -> roundNumber } by counting regattas
+ * of the same Season + Class + RegattaType in date order.
+ *
+ * Col indices (0-based):
+ *   0=HexKey  2=Date  6=Class  7=RegattaType  10=Season
+ */
+function buildRoundNumberMap_(data) {
+  const rows = [];
+  for (let r = 1; r < data.length; r++) {
+    const row  = data[r];
+    const date = row[2] instanceof Date ? row[2] : new Date(row[2]);
+    if (isNaN(date) || !row[0]) continue;
+    rows.push({
+      hexKey:      row[0],
+      date:        date,
+      boatClass:   row[6],   // Col G
+      regattaType: row[7],   // Col H
+      season:      row[10] || deriveSeason_(date)  // Col K
+    });
+  }
+ 
+  rows.sort((a, b) => a.date - b.date);
+ 
+  const counters = {};
+  const roundMap = {};
+ 
+  rows.forEach(ev => {
+    if (!ev.boatClass || !ev.regattaType) return;
+    // Key on Season + Class + RegattaType so DF95 Scratch and DF95 Handicap
+    // each get their own independent round count
+    const groupKey = ev.season + '|' + ev.boatClass + '|' + ev.regattaType;
+    counters[groupKey] = (counters[groupKey] || 0) + 1;
+    roundMap[ev.hexKey] = counters[groupKey];
+  });
+ 
+  return roundMap;
+}
+
+/**
+ * Formats a Date object or "HH:MM" string to "HH:MM".
+ */
+function formatTime_(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, Session.getScriptTimeZone(), 'HH:mm');
+  }
+  return String(val).trim();
+}
+ 
+/**
+ * Returns a short uppercase date string like "22 AUG".
+ */
+function formatShortDate_(date) {
+  const day = String(date.getDate()).padStart(2, '0');
+  const mon = ['JAN','FEB','MAR','APR','MAY','JUN',
+                'JUL','AUG','SEP','OCT','NOV','DEC'][date.getMonth()];
+  return day + ' ' + mon;
+}
+
+/**
+ * Derives a season string from an event date.
+ * Season starts in July: Aug 2026 -> "2026-27", Feb 2027 -> "2026-27".
+ */
+function deriveSeason_(date) {
+  const y = date.getFullYear();
+  const m = date.getMonth(); // 0-based
+  if (m >= 6) {
+    return y + '-' + String(y + 1).slice(-2);
+  } else {
+    return (y - 1) + '-' + String(y).slice(-2);
+  }
+}
+
 /* =====================================================
    SINGLE HTML SHELL (NO DUPLICATION)
    ===================================================== */

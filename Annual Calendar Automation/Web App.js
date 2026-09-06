@@ -16,6 +16,94 @@ function doGet(e) {
   const action = e.parameter.action;
   const sheetName = e.parameter.sheet;
 
+  
+  if (action === "fetch") {
+    const sheet = ss.getSheetByName(sheetName);
+    const values = sheet.getDataRange().getValues();
+    return json({ values });
+  }
+  
+  if (e.parameter.type === "calendar") {
+    const calSheet = ss.getSheetByName('SMMC Annual Calendar');
+    if (!calSheet) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ error: 'SMMC Annual Calendar sheet not found' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+  
+    const calData        = calSheet.getDataRange().getValues();
+    const today          = new Date();
+    const threeMonthsOut = new Date(today.getFullYear(), today.getMonth() + 3, today.getDate());
+  
+    // Load class images from Club Management spreadsheet (keyed by ClassName)
+    const classImageMap = getClassImageMap_();
+  
+    // Build round-number lookup first (needs full dataset)
+    const roundMap = buildRoundNumberMap_(calData);
+  
+    // Bucket events by "YYYY-MM" for the next 3 months
+    const monthBuckets = {};
+  
+    for (let r = 1; r < calData.length; r++) {
+      const row = calData[r];
+  
+      const eventDate = row[2] instanceof Date ? row[2] : new Date(row[2]);
+      if (isNaN(eventDate)) continue;
+      if (eventDate < today || eventDate > threeMonthsOut) continue;
+  
+      const hexKey      = row[0];   // Col A
+      const boatClass   = row[6];   // Col G
+      const regattaType = row[7];   // Col H
+      const competition = row[8];   // Col I
+      const season      = row[10] || deriveSeason_(eventDate);  // Col K
+      const roundNum    = roundMap[hexKey] || '';
+      const results     = row[15] || 'Not Started';             // Col P
+  
+      const startStr  = formatTime_(row[3]);   // Col D
+      const finishStr = formatTime_(row[4]);   // Col E
+  
+      const dayAbbr   = ['SUN','MON','TUE','WED','THU','FRI','SAT'][eventDate.getDay()];
+      const dateLabel = dayAbbr + ' ' + formatShortDate_(eventDate);
+  
+      const roundSuffix = roundNum ? ' Rd ' + roundNum : '';
+      const eventName   = (boatClass + ' ' + regattaType + roundSuffix).trim();
+  
+      // Look up the Drive thumbnail URL for this class; fall back to General
+      const classImageUrl = classImageMap[boatClass] || classImageMap['General'] || '';
+  
+      const bucketKey = Utilities.formatDate(eventDate, Session.getScriptTimeZone(), 'yyyy-MM');
+      if (!monthBuckets[bucketKey]) {
+        monthBuckets[bucketKey] = {
+          monthLabel: Utilities.formatDate(eventDate, Session.getScriptTimeZone(), 'MMMM yyyy'),
+          events: []
+        };
+      }
+  
+      monthBuckets[bucketKey].events.push({
+        hexKey:      hexKey,
+        classImage:  classImageUrl,   // usable https:// Drive thumbnail URL
+        dateLabel:   dateLabel,
+        startTime:   startStr,
+        finishTime:  finishStr,
+        boatClass:   boatClass,
+        regattaType: regattaType,
+        competition: competition,
+        eventName:   eventName,
+        season:      season,
+        roundNum:    roundNum,
+        results:     results
+      });
+    }
+  
+    const sortedMonths = Object.keys(monthBuckets)
+      .sort()
+      .map(key => monthBuckets[key]);
+  
+    return ContentService
+      .createTextOutput(JSON.stringify({ months: sortedMonths }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
   const title = sheet.getRange('A1').getDisplayValue() || 'Race Day';
   const raceInfo = sheet.getRange('B2').getValue();
 
@@ -45,11 +133,8 @@ function doGet(e) {
     }
   }
 
-  if (action === "fetch") {
-    const sheet = ss.getSheetByName(sheetName);
-    const values = sheet.getDataRange().getValues();
-    return json({ values });
-  }
+
+
 
   // =========================
   // LOAD RACE DATA
