@@ -1,3 +1,33 @@
+function getWindScale(wind){
+  temp = parseFloat(wind);  // Ensure it's a number
+  if (wind > 47.52) return 'Storm';  
+  if (wind > 39.96) return 'Strong Gale';  
+  if (wind > 32.94) return 'Gale';  
+  if (wind > 26.46) return 'Near Gale';   
+  if (wind > 20.52) return 'Strong Breeze';
+  if (wind > 15.12) return 'Fresh Breeze';  
+  if (wind > 10.26) return 'Moderate Breeze';  
+  if (wind > 5.94) return 'Gentle Breeze';   
+  if (wind > 2.70) return 'Light Breeze';  
+  if (wind > 0.53) return 'Light Air'; 
+  return 'Calm';
+}
+
+// ============================================================
+// HELPER FUNCTIONS
+// Add these outside doGet(), at the module level.
+// ============================================================
+ 
+/**
+ * Reads the Classes sheet from the SMMC Club Management spreadsheet
+ * and returns a map of { ClassName -> Drive thumbnail URL }.
+ *
+ * Classes sheet columns (0-based):
+ *   0=ClassID  1=ClassName  2=Coordinator  3=Restrictions  4=Handicap  5=Insignia (Drive FileID)
+ *
+ * Store the Club Management spreadsheet ID in Script Properties
+ * under the key 'ClubManagementSSID'.
+ */
 function getClassImageMap_() {
   const imageMap = {};
  
@@ -123,8 +153,16 @@ function renderPage(title, bodyContent) {
 
   <style>
     :root {
-    --header-bg: #1f4e78;
-    --radius: 8px;
+      --header-bg: #1f4e78;
+      --radius: 8px;
+      --glass-fill: rgba(160,160,160,0.15);
+      --glass-fill-hi: rgba(160,160,160,0.45);
+      --glass-border: rgba(255,255,255,0.3);
+      --glass-blur: 12px;
+      --foam: #ffffff;
+      --foam-dim: rgba(255,255,255,0.75);
+      --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      --font-data: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
     }
 
     /* 1. RESET & BOX MODEL - Prevents internal scrollbars */
@@ -301,6 +339,41 @@ function renderPage(title, bodyContent) {
     }
     .uvVal {font-size: 1em; font-weight: 600;}
 
+    .weather-panel--daily{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      padding:8px 12px;
+      margin-top:8px;
+      border-radius:8px;
+      background:linear-gradient(155deg, var(--glass-fill-hi), var(--glass-fill));
+      border:1px solid var(--glass-border);
+      backdrop-filter:blur(var(--glass-blur)) saturate(140%);
+      -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(140%);
+      box-shadow:
+        0 1px 0 rgba(255,255,255,0.2) inset,
+        0 12px 28px rgba(2,10,18,0.3);
+      position:relative;
+    }
+    .weather-panel--daily::after{
+      content:"";
+      position:absolute; inset:0;
+      border-radius:inherit;
+      background:linear-gradient(120deg, rgba(255,255,255,0.12) 0%, transparent 30%);
+      pointer-events:none;
+    }
+    .daily-row--summary{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      justify-content:center;
+    }
+    .daily-icon{ font-size:34px; line-height:1; flex:none; filter:drop-shadow(0 2px 6px rgba(0,0,0,0.25)); }
+    .daily-desc{ font-family:var(--font-body); font-size:13.5px; font-weight:600; color:var(--foam); }
+    .daily-temps{ font-family:var(--font-data); font-size:20px; display:flex; align-items:baseline; gap:4px; margin-left:auto; }
+    .daily-temps .temp-max{ font-weight:500; }
+    .daily-temps .temp-min{ font-size:13px; color:var(--foam-dim); }
+    
     .weather-daily-card{
       display:flex;
       align-items:center;
@@ -362,9 +435,7 @@ function renderPage(title, bodyContent) {
       font-size:13px;
       color:var(--foam-dim);
       letter-spacing:0.02em;
-      padding-top:6px;
-      margin-top:6px;
-      border-top:1px solid var(--glass-border);
+      padding-top:4px;
     }
     .daily-row .wind{ color:var(--foam-dim); }
     .daily-row .rain{ color:var(--foam-dim); }
@@ -607,6 +678,7 @@ function buildDailySummaryHtml(dailyData, raceDate) {
     const windMax        = row[4];
     const windMean       = row[5];
     const windDir        = row[6];
+    const windScl        = getWindScale(row[5])
     const tempMin        = Math.round(row[7]);
     const tempMax        = Math.round(row[8]);
 
@@ -617,22 +689,21 @@ function buildDailySummaryHtml(dailyData, raceDate) {
     const windArrow = getWindArrow(windDir);
 
     return `
-      <div class="weather-daily-card">
-        <div class="daily-icon">${desc.icon}</div>
-        <div class="daily-desc">${desc.label}</div>
-        <div class="daily-temps">
-          <span class="temp-min" style="color:${minTempColor};">${tempMin}°
-          </span> /
-          <span class="temp-max" style="color:${maxTempColor};"> ${tempMax}°</span>
+      <div class="weather-panel weather-panel--daily">
+        <div class="daily-row--summary">
+          <span class="daily-icon">${desc.icon}</span>
+          <span class="daily-desc">${desc.label}</span>
+          <span class="daily-temps">
+            <span class="temp-min" style="color:${minTempColor};">${tempMin}°</span> /
+            <span class="temp-max" style="color:${maxTempColor};">${tempMax}°</span>
+          </span>
         </div>
         <div class="daily-row">
-          <span class="wind">Wind ${windMean}–${windMax} kt ${windArrow}</span>
+          <span class="wind">Wind ${windMean}–${windMax} kt ${windArrow} ${windScl}</span>
         </div>
         <div class="daily-row">
           <span class="rain"> Rain ${rainSum} mm</span>
-          <span class="uvVal" style="color:${uvColor};">
-            ${uvMax !== null ? 'UV ' + uvMax : ''}
-          </span>
+          <span class="uvVal" style="color:${uvColor};">${uvMax !== null ? 'UV ' + uvMax : ''}</span>
         </div>
       </div>
     `;

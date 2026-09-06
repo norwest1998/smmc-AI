@@ -1,39 +1,69 @@
-// =========================================================
-// DAILY FORECAST CARD CSS
-// Same tokens as the rest of the site (--glass-fill, --foam, etc).
-// Kept as a standalone constant so it's easy to find/edit, and so it
-// can be injected into the HTML output regardless of how renderPage()
-// builds its <head>.
-// =========================================================
-
 function doGet(e) {
+  try {
+    return handleGet_(e);
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
 
+function handleGet_(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName('Web doGet Datasheet');
   const data = sheet.getDataRange().getValues();
-  
+
   const type = e.parameter.type;
+  const load = e.parameter.load;
   const action = e.parameter.action;
   const sheetName = e.parameter.sheet;
 
-  
   if (action === "fetch") {
-    const sheet = ss.getSheetByName(sheetName);
-    const values = sheet.getDataRange().getValues();
+    const fetchSheet = ss.getSheetByName(sheetName);
+    if (!fetchSheet) return json({ error: `Sheet not found: ${sheetName}` });
+    const values = fetchSheet.getDataRange().getValues();
     return json({ values });
   }
-  
+
+  const title = sheet.getRange('A1').getDisplayValue() || 'Race Day';
+  const raceInfo = sheet.getRange('B2').getValue();
+
+  let cardsHtml = '';
+
+  function respondWithPage_(pageTitle, html) {
+    if (load === "next") {
+      return ContentService
+        .createTextOutput(JSON.stringify({ html: html }))  
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    return HtmlService.createHtmlOutput(injectStyle(renderPage(pageTitle, html)))
+      .setTitle(pageTitle)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  // MOVED: handle the trivial "no events" case immediately, still fine to keep here
+  if (type === "display" && raceInfo === "No Events scheduled for the weekend") {
+    cardsHtml = `
+      <div class="race-card no-events">
+        <img class="race-bg" src="${DEFAULT_BG_IMAGE}" alt="">
+        <div class="card-content"><div class="heading"><h2>${raceInfo}</h2></div></div>
+      </div>`;
+    return respondWithPage_(title, cardsHtml);
+  }
+
   if (e.parameter.type === "calendar") {
-    const calSheet = ss.getSheetByName('SMMC Annual Calendar');
+    const calSheet = ss.getSheetByName('Event Data');
     if (!calSheet) {
       return ContentService
-        .createTextOutput(JSON.stringify({ error: 'SMMC Annual Calendar sheet not found' }))
+        .createTextOutput(JSON.stringify({ error: 'Event Data sheet not found' }))
         .setMimeType(ContentService.MimeType.JSON);
     }
   
     const calData        = calSheet.getDataRange().getValues();
-    const today          = new Date();
-    const threeMonthsOut = new Date(today.getFullYear(), today.getMonth() + 3, today.getDate());
+    const today = new Date();
+    const target = new Date(today.getFullYear(), today.getMonth() + 2, 1);
+    const threeMonthsOut = new Date(target.getFullYear(), target.getMonth() + 1, 0);
   
     // Load class images from Club Management spreadsheet (keyed by ClassName)
     const classImageMap = getClassImageMap_();
@@ -104,44 +134,12 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 
-  const title = sheet.getRange('A1').getDisplayValue() || 'Race Day';
-  const raceInfo = sheet.getRange('B2').getValue();
-
-  let cardsHtml = ''; 
-
-  if(type === "display") {
-    // =========================
-    // NO EVENTS CASE
-    // =========================
-    if (raceInfo === "No Events scheduled for the weekend") {
-      cardsHtml = `
-        <div class="race-card no-events">
-          <img class="race-bg" src="${DEFAULT_BG_IMAGE}" alt="">
-          <div class="card-content">
-            <div class="heading">
-              <h2>${raceInfo}</h2>
-            </div>
-          </div>
-        </div>
-      `;
-
-      return HtmlService.createHtmlOutput(injectStyle(renderPage(title, cardsHtml)))
-        .setTitle(title)
-        .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-
-    }
-  }
-
-
-
-
   // =========================
   // LOAD RACE DATA
   // =========================
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) {
-    return HtmlService.createHtmlOutput(injectStyle(renderPage(title, '<p>No race data found</p>')));
+    return respondWithPage_(title, '<p>No race data found</p>');
   }
 
   const raceData = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
@@ -193,18 +191,17 @@ function doGet(e) {
     // =========================
 
     raceData.forEach(row => {
-
       const regattaName = row[0];
       if (!regattaName) return;
 
       const startTime = row[1];
       const endTime = row[2];
-
       const startDisplay = Utilities.formatDate(startTime, Session.getScriptTimeZone(), 'HH:mm');
       const endDisplay   = Utilities.formatDate(endTime, Session.getScriptTimeZone(), 'HH:mm');
 
-      const raceDate = new Date(title); // Saturday
-      Logger.log("Race day: " + raceDate);
+      const raceDate = new Date(title);
+      if (isNaN(raceDate)) return; // skip this malformed row only
+
       const bgImage = getWeatherPic(raceDate);
 
       let weatherRow = '';
@@ -244,7 +241,7 @@ function doGet(e) {
       }
 
       if (hourlyHtml) {
-        weatherRow = `<div class="weather-cards-row">${hourlyHtml}</div>`;
+        weatherRow = `<div class="weather-panel weather-panel--hourly">${hourlyHtml}</div>`;
       } else {
         const dailySummary = buildDailySummaryHtml(dailyData, raceDate);
         weatherRow = dailySummary ||
@@ -270,10 +267,7 @@ function doGet(e) {
     // =========================
     // FINAL RENDER
     // =========================
-    return HtmlService.createHtmlOutput(injectStyle(renderPage(title, cardsHtml)))
-      .setTitle(title)
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1') 
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    return respondWithPage_(title, cardsHtml);
   }
 }
 
