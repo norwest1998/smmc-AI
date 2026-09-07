@@ -280,8 +280,8 @@ function getApplicationsList_() {
       club:           clubCol      !== -1 ? sanitizeCell_(row[clubCol])       : '',
       nominator:      nominatorCol !== -1 ? sanitizeCell_(row[nominatorCol]) : '',
       seconder:       seconderCol  !== -1 ? sanitizeCell_(row[seconderCol])  : '',
-      votesFor:       votesForCol, 
-      votesAgainst:   votesAgainstCol,
+      votesFor:       votesForCol     !== -1 ? sanitizeCell_(row[votesForCol])     : '',
+      votesAgainst:   votesAgainstCol !== -1 ? sanitizeCell_(row[votesAgainstCol]) : '',
       lastUpdated:    luFormatted
     });
   }
