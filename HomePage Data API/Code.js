@@ -232,16 +232,18 @@ function getApplicationsList_() {
   var h = values[headerRowIdx];
   var tz = Session.getScriptTimeZone();
 
-  var rowIdCol       = findHeader_(h, ['rowid', 'id', 'row id']);
-  var statusCol      = findHeader_(h, ['status']);
-  var timestampCol   = findHeader_(h, ['timestamp', 'submitted', 'date']);
-  var firstNameCol   = findHeader_(h, ['firstname', 'first name', 'given name']);
-  var surnameCol     = findHeader_(h, ['surname', 'last name', 'family name']);
-  var memTypeCol     = findHeader_(h, ['membershiptype', 'membership type', 'membership']);
-  var clubCol        = findHeader_(h, ['nameofcurrentclub', 'current club', 'club']);
-  var nominatorCol   = findHeader_(h, ['nominatingmembername', 'nominator', 'nominating member name']);
-  var seconderCol    = findHeader_(h, ['secondersmembername', 'seconder', 'seconders member name']);
-  var lastUpdatedCol = findHeader_(h, ['laststatusupdated', 'last updated', 'updated']);
+  var rowIdCol        = findHeader_(h, ['rowid', 'id', 'row id']);
+  var statusCol       = findHeader_(h, ['status']);
+  var timestampCol    = findHeader_(h, ['timestamp', 'submitted', 'date']);
+  var firstNameCol    = findHeader_(h, ['firstname', 'first name', 'given name']);
+  var surnameCol      = findHeader_(h, ['surname', 'last name', 'family name']);
+  var memTypeCol      = findHeader_(h, ['membershiptype', 'membership type', 'membership']);
+  var clubCol         = findHeader_(h, ['nameofcurrentclub', 'current club', 'club']);
+  var nominatorCol    = findHeader_(h, ['nominatingmembername', 'nominator', 'nominating member name']);
+  var seconderCol     = findHeader_(h, ['secondersmembername', 'seconder', 'seconders member name']);
+  var lastUpdatedCol  = findHeader_(h, ['laststatusupdated', 'last updated', 'updated']);
+  var votesForCol     = findHeader_(h, ['Votes For']);
+  var votesAgainstCol = findHeader_(h, ['Votes Against']);
 
   var applications = [];
   for (var r = dataStartIdx; r < values.length; r++) {
@@ -278,6 +280,8 @@ function getApplicationsList_() {
       club:           clubCol      !== -1 ? sanitizeCell_(row[clubCol])       : '',
       nominator:      nominatorCol !== -1 ? sanitizeCell_(row[nominatorCol]) : '',
       seconder:       seconderCol  !== -1 ? sanitizeCell_(row[seconderCol])  : '',
+      votesFor:       votesForCol, 
+      votesAgainst:   votesAgainstCol,
       lastUpdated:    luFormatted
     });
   }
