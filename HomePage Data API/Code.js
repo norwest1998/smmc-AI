@@ -242,8 +242,8 @@ function getApplicationsList_() {
   var nominatorCol    = findHeader_(h, ['nominatingmembername', 'nominator', 'nominating member name']);
   var seconderCol     = findHeader_(h, ['secondersmembername', 'seconder', 'seconders member name']);
   var lastUpdatedCol  = findHeader_(h, ['laststatusupdated', 'last updated', 'updated']);
-  var votesForCol     = findHeader_(h, ['Votes For']);
-  var votesAgainstCol = findHeader_(h, ['Votes Against']);
+  var votesForCol     = findHeader_(h, ['votesfor', 'votes for', 'for']);
+  var votesAgainstCol = findHeader_(h, ['votesagainst', 'votes against', 'against']);
 
   var applications = [];
   for (var r = dataStartIdx; r < values.length; r++) {
@@ -280,8 +280,8 @@ function getApplicationsList_() {
       club:           clubCol      !== -1 ? sanitizeCell_(row[clubCol])       : '',
       nominator:      nominatorCol !== -1 ? sanitizeCell_(row[nominatorCol]) : '',
       seconder:       seconderCol  !== -1 ? sanitizeCell_(row[seconderCol])  : '',
-      votesFor:       row[votesForCol],
-      votesAgainst:   row[votesAgainstCol],
+      votesFor:       votesForCol     !== -1 ? row[votesForCol]     : '',
+      votesAgainst:   votesAgainstCol !== -1 ? row[votesAgainstCol] : '',
       lastUpdated:    luFormatted
     });
   }
