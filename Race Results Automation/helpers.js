@@ -114,6 +114,21 @@ function ensureMembersInOverall(bookID, rankedScores, raceType) {
   Logger.log('New member rows inserted and backfilled successfully.');
 }
 
+function getBoatId(sail, memberName, className) {
+  const cfg = getConfig();
+  const ss = SpreadsheetApp.openById(cfg.masterDataSpreadsheetId);
+  const sheet = ss.getSheetByName("ClassMembers");
+
+  const memberData = sheet.getDataRange().getValues();
+
+  for (let i = 1; i <= memberData.length; i++) {
+    if (memberData[2][i] === memberName && memberData[4][i] === sail && memberData[3][i] === className) {
+      return memberData[0][i];
+    }
+  }
+  return "Boat Id not found";
+}
+
 /**
  * Looks up the EventID from the Annual Calendar spreadsheet
  * by matching ClassName and Date (exact match on date)
