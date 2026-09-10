@@ -244,6 +244,7 @@ function getApplicationsList_() {
   var lastUpdatedCol  = findHeader_(h, ['laststatusupdated', 'last updated', 'updated']);
   var votesForCol     = findHeader_(h, ['votesfor', 'votes for', 'for']);
   var votesAgainstCol = findHeader_(h, ['votesagainst', 'votes against', 'against']);
+  var approvedCol     = findHeader_(h, ['membership approved', 'membershipapproved', 'membership_approved', 'membership approved?']);
 
   var applications = [];
   for (var r = dataStartIdx; r < values.length; r++) {
@@ -282,7 +283,8 @@ function getApplicationsList_() {
       seconder:       seconderCol  !== -1 ? sanitizeCell_(row[seconderCol])  : '',
       votesFor:       votesForCol     !== -1 ? row[votesForCol]     : '',
       votesAgainst:   votesAgainstCol !== -1 ? row[votesAgainstCol] : '',
-      lastUpdated:    luFormatted
+      lastUpdated:    luFormatted,
+      approved:       approvedCol  !== -1 ? sanitizeCell_(row[approvedCol])  : ''
     });
   }
 
