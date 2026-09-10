@@ -239,16 +239,17 @@ function getRaceSheetFiles() {
 function importRaceSheet(fileId) {
   try {
     const sourceSS = SpreadsheetApp.openById(fileId);
-    const sourceSheet = sourceSS.getSheets()[0]; // assumes data is on first sheet
+    const sourceSheet = sourceSS.getSheets()[0];
 
     const destSS = SpreadsheetApp.getActiveSpreadsheet();
     const destSheet = destSS.getSheetByName('Current Regatta');
     if (!destSheet) throw new Error('Sheet "Current Regatta" not found');
 
     const sourceRange = sourceSheet.getRange('A1:M33');
-    const destRange = destSheet.getRange('B10');
+    const values = sourceRange.getValues();
 
-    sourceRange.copyTo(destRange, { contentsOnly: true });
+    const destRange = destSheet.getRange(10, 2, values.length, values[0].length);
+    destRange.setValues(values);
 
     return { success: true, message: 'Race sheet imported successfully!' };
   } catch (error) {
