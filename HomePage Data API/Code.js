@@ -244,7 +244,8 @@ function getApplicationsList_() {
   var lastUpdatedCol  = findHeader_(h, ['laststatusupdated', 'last updated', 'updated']);
   var votesForCol     = findHeader_(h, ['votesfor', 'votes for', 'for']);
   var votesAgainstCol = findHeader_(h, ['votesagainst', 'votes against', 'against']);
-  var approvedCol     = findHeader_(h, ['membership approved', 'membershipapproved', 'membership_approved', 'membership approved?']);
+  var approvedCol     = findHeader_(h, ['membership approved', 'membershipapproved', 'membership_approved', 'membership approved?']);,
+  var turnAroundCol   = findHeader_(h, ['turnaround time', 'turnaroundtime', 'turnaround_time', 'turnaround time?']);
 
   var applications = [];
   for (var r = dataStartIdx; r < values.length; r++) {
@@ -284,7 +285,8 @@ function getApplicationsList_() {
       votesFor:       votesForCol     !== -1 ? row[votesForCol]     : '',
       votesAgainst:   votesAgainstCol !== -1 ? row[votesAgainstCol] : '',
       lastUpdated:    luFormatted,
-      approved:       approvedCol  !== -1 ? sanitizeCell_(row[approvedCol])  : ''
+      approved:       approvedCol  !== -1 ? sanitizeCell_(row[approvedCol])  : '',
+      turnAround:     turnAroundCol   !== -1 ? sanitizeCell_(row[turnAroundCol])  : ''
     });
   }
 
