@@ -1,8 +1,11 @@
 // Main menu function to show sidebar
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu('Images')
-    .addItem('Load Race Results', 'showSidebar')
+    .createMenu('Import')
+    .addSubMenu(SpreadsheetApp.getUi().createMenu('Images')
+      .addItem('Load Race Results', 'showSidebar'))
+    .addSubMenu(SpreadsheetApp.getUi().createMenu('RaceSheets')
+      .addItem('Load Race Sheets', 'showRaceSheetSidebar'))
     .addToUi();
 }
 
@@ -201,5 +204,54 @@ function populateSheet(jsonData, fileId) {
     
   } catch (error) {
     throw new Error('Failed to populate sheet: ' + error.message);
+  }
+}
+
+// Show the RaceSheets sidebar
+function showRaceSheetSidebar() {
+  const html = HtmlService.createHtmlOutputFromFile('RaceSheetSidebar')
+    .setTitle('Race Sheet Selector')
+    .setWidth(300);
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+// Get list of files from the Pending Race Results folder
+function getRaceSheetFiles() {
+  const folderId = 'PENDING_RACE_RESULTS_FOLDER_ID'; // <-- replace with actual folder ID
+  const folder = DriveApp.getFolderById(folderId);
+  const files = folder.getFiles();
+  const fileList = [];
+
+  while (files.hasNext()) {
+    const file = files.next();
+    const fileId = file.getId();
+    fileList.push({
+      id: fileId,
+      name: file.getName(),
+      url: file.getUrl(),
+      thumbnailUrl: 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w400'
+    });
+  }
+
+  return fileList;
+}
+
+function importRaceSheet(fileId) {
+  try {
+    const sourceSS = SpreadsheetApp.openById(fileId);
+    const sourceSheet = sourceSS.getSheets()[0]; // assumes data is on first sheet
+
+    const destSS = SpreadsheetApp.getActiveSpreadsheet();
+    const destSheet = destSS.getSheetByName('Current Regatta');
+    if (!destSheet) throw new Error('Sheet "Current Regatta" not found');
+
+    const sourceRange = sourceSheet.getRange('A1:M33');
+    const destRange = destSheet.getRange('B10');
+
+    sourceRange.copyTo(destRange, { contentsOnly: true });
+
+    return { success: true, message: 'Race sheet imported successfully!' };
+  } catch (error) {
+    throw new Error('Failed to import race sheet: ' + error.message);
   }
 }
