@@ -37,7 +37,7 @@ function getApplication(rowId){
       Logger.log("Sec: " + seconderComment);
 
       var appDetails = {
-        rowId: row,
+        rowId: rowId,
         status: data[i][1],
         timestamp: data[i][2],
         email: data[i][3],
