@@ -217,7 +217,7 @@ function showRaceSheetSidebar() {
 
 // Get list of files from the Pending Race Results folder
 function getRaceSheetFiles() {
-  const folderId = 'PENDING_RACE_RESULTS_FOLDER_ID'; // <-- replace with actual folder ID
+  const folderId = '1jiuOFPN-scXcWLbnF6p4C9utzlrQi1Vl';
   const folder = DriveApp.getFolderById(folderId);
   const files = folder.getFiles();
   const fileList = [];
