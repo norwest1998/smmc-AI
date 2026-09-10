@@ -57,7 +57,8 @@ function getApplication(rowId){
         votesAgainst: data[i][26],
         log: data[i][23],
         statusClass: statusClass,
-        lastUpdatedStr: lastUpdated.toLocaleDateString()
+        lastUpdatedStr: lastUpdated.toLocaleDateString(),
+        approved: data[i][17]
       };
 
       return appDetails;
