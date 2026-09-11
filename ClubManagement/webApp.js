@@ -40,10 +40,10 @@ function doPost(e) {
   if (body.action === "markPaid") {
     try {
       const result = markPaid(body.row, body.isPaid);
-      logAudit("markPaid", "Members", `Row ${body.row}`, "", body.isPaid, "success", result);
+      logAudit("markPaid", `Row ${body.row}`, "", body.isPaid, "success", result);
       return json({ success: true, message: result });
     } catch (err) {
-      logAudit("markPaid", "Members", `Row ${body.row}`, "", body.isPaid, "error", err.message);
+      logAudit("markPaid", `Row ${body.row}`, "", "", "error", err.message);
       return json({ error: err.message });
     }
   }
@@ -51,10 +51,10 @@ function doPost(e) {
   if (body.action === "updatePaidBatch") {
     try {
       const count = updatePaidMembersBatch(body.updates);
-      logAudit("updatePaidBatch", "Members", `${count} row(s)`, "", "", "success", `${count} member(s) updated`);
+      logAudit("updatePaidBatch", `${count} member(s)`, "", "", "success", `${count} member(s) updated`);
       return json({ success: true, count });
     } catch (err) {
-      logAudit("updatePaidBatch", "Members", "", "", "", "error", err.message);
+      logAudit("updatePaidBatch", "", "", "", "error", err.message);
       return json({ error: err.message });
     }
   }
@@ -62,10 +62,10 @@ function doPost(e) {
   if (body.action === "sendUpdateRequest") {
     try {
       const result = processEmailRequest(body.member);
-      logAudit("sendUpdateRequest", "Members", body.member.email, "", "", "success", "Update request sent");
+      logAudit("sendUpdateRequest", body.member.name, "", body.member.email, "success", "Update request sent");
       return json(result);
     } catch (err) {
-      logAudit("sendUpdateRequest", "Members", body.member && body.member.email, "", "", "error", err.message);
+      logAudit("sendUpdateRequest", body.member && body.member.name, "", "", "error", err.message);
       return json({ error: err.message });
     }
   }
@@ -73,10 +73,10 @@ function doPost(e) {
   if (body.action === "requestAllUpdates") {
     try {
       sendUpdateEmails(); // sendUpdateRequests(false)
-      logAudit("requestAllUpdates", "Members", "All active", "", "", "success", "Update request sent to all active members");
+      logAudit("requestAllUpdates", "All active members", "", "Sent", "success", "Update request sent to all active members");
       return json({ success: true });
     } catch (err) {
-      logAudit("requestAllUpdates", "Members", "All active", "", "", "error", err.message);
+      logAudit("requestAllUpdates", "All active members", "", "", "error", err.message);
       return json({ error: err.message });
     }
   }
@@ -84,10 +84,10 @@ function doPost(e) {
   if (body.action === "sendRenewals") {
     try {
       sendRenewEmails(); // sendUpdateRequests(true)
-      logAudit("sendRenewals", "Members", "All active", "", "", "success", "Renewal email sent to all active members");
+      logAudit("sendRenewals", "All active members", "", "Sent", "success", "Renewal email sent to all active members");
       return json({ success: true });
     } catch (err) {
-      logAudit("sendRenewals", "Members", "All active", "", "", "error", err.message);
+      logAudit("sendRenewals", "All active members", "", "", "error", err.message);
       return json({ error: err.message });
     }
   }

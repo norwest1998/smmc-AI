@@ -531,14 +531,18 @@ function buildDailySummaryHtml(dailyData, raceDate) {
 }
 
 /**
- * Appends one row to the "AuditLog" sheet for any Member Management action.
+ * Appends one row to the "AuditLog" sheet, matching the existing schema
+ * used by processForm(): [HexCode, Timestamp, MemberName, Field, OldValue, NewValue].
+ * Member Management actions have no hexCode, so "ADMIN" is used as the reference.
+ * On error, the failure message is written into the NewValue column prefixed "ERROR:".
  */
-function logAudit(fn, sheet, field, before, after, status, message) {
+function logAudit(fn, memberName, before, after, status, message) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const auditSheet = ss.getSheetByName("AuditLog");
     if (!auditSheet) return;
-    auditSheet.appendRow([new Date(), fn, sheet, field, before ?? "", after ?? "", status, message ?? ""]);
+    const newValue = status === "error" ? `ERROR: ${message}` : (after ?? message ?? "");
+    auditSheet.appendRow(["ADMIN", new Date(), memberName || "", `MemberMgmt.${fn}`, before ?? "", newValue]);
   } catch (e) {
     Logger.log("logAudit failed: " + e.message);
   }
