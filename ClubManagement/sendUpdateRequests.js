@@ -60,8 +60,10 @@ function sendUpdateRequests(renew) {
       try {
         MailApp.sendEmail(memberEmail, subject, body);
         trackingSheet.appendRow([hexCode, timestamp, memberName, memberEmail, "Sent", "", timestamp]);
+        logAudit(renew ? "sendRenewals" : "requestAllUpdates", memberName, "", memberEmail, "success", "Email sent");
       } catch (e) {
         Logger.log(`Failed to send to ${memberEmail}: ${e.message}`);
+        logAudit(renew ? "sendRenewals" : "requestAllUpdates", memberName, "", "", "error", e.message);
       }
     }
   }

@@ -40,10 +40,10 @@ function doPost(e) {
   if (body.action === "markPaid") {
     try {
       const result = markPaid(body.row, body.isPaid);
-      logAudit("markPaid", `Row ${body.row}`, "", body.isPaid, "success", result);
+      logAudit("markPaid", body.name || `Row ${body.row}`, "", body.isPaid, "success", result);
       return json({ success: true, message: result });
     } catch (err) {
-      logAudit("markPaid", `Row ${body.row}`, "", "", "error", err.message);
+      logAudit("markPaid", body.name || `Row ${body.row}`, "", "", "error", err.message);
       return json({ error: err.message });
     }
   }
@@ -51,7 +51,11 @@ function doPost(e) {
   if (body.action === "updatePaidBatch") {
     try {
       const count = updatePaidMembersBatch(body.updates);
-      logAudit("updatePaidBatch", `${count} member(s)`, "", "", "success", `${count} member(s) updated`);
+      // Log one row per member so each can be found by name in the audit log,
+      // instead of a single aggregated "N member(s)" entry.
+      (body.updates || []).forEach(u => {
+        logAudit("updatePaidBatch", u.name || `Row ${u.row}`, "", u.isPaid, "success", "Bulk paid status update");
+      });
       return json({ success: true, count });
     } catch (err) {
       logAudit("updatePaidBatch", "", "", "", "error", err.message);
@@ -72,8 +76,7 @@ function doPost(e) {
 
   if (body.action === "requestAllUpdates") {
     try {
-      sendUpdateEmails(); // sendUpdateRequests(false)
-      logAudit("requestAllUpdates", "All active members", "", "Sent", "success", "Update request sent to all active members");
+      sendUpdateEmails(); // sendUpdateRequests(false) — logs one AuditLog row per member internally
       return json({ success: true });
     } catch (err) {
       logAudit("requestAllUpdates", "All active members", "", "", "error", err.message);
@@ -83,8 +86,7 @@ function doPost(e) {
 
   if (body.action === "sendRenewals") {
     try {
-      sendRenewEmails(); // sendUpdateRequests(true)
-      logAudit("sendRenewals", "All active members", "", "Sent", "success", "Renewal email sent to all active members");
+      sendRenewEmails(); // sendUpdateRequests(true) — logs one AuditLog row per member internally
       return json({ success: true });
     } catch (err) {
       logAudit("sendRenewals", "All active members", "", "", "error", err.message);
