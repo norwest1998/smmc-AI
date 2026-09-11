@@ -565,3 +565,7 @@ function injectStyle(html, css) {
   }
   return styleTag + html;
 }
+
+function generateHexCode() {
+  return Utilities.getUuid().replace(/-/g, '');
+}

@@ -74,7 +74,7 @@ function processPaymentReceived(name, email) {
   const subject = "Payment received: Membership renewed";
   const htmlBody = `
     <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-      <h2 style="color: #1a73e8;">Update Your Member Details</h2>
+      <h2 style="color: #1a73e8;">Membership Payment Received</h2>
       <p>Hello ${name},</p>
 
       <p>Thank you for renewing your membership, your membership has been extended until ${expiryDate}.</p>
