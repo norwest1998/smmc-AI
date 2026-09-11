@@ -530,6 +530,20 @@ function buildDailySummaryHtml(dailyData, raceDate) {
   return null; // no matching date found in the forecast sheet
 }
 
+/**
+ * Appends one row to the "AuditLog" sheet for any Member Management action.
+ */
+function logAudit(fn, sheet, field, before, after, status, message) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const auditSheet = ss.getSheetByName("AuditLog");
+    if (!auditSheet) return;
+    auditSheet.appendRow([new Date(), fn, sheet, field, before ?? "", after ?? "", status, message ?? ""]);
+  } catch (e) {
+    Logger.log("logAudit failed: " + e.message);
+  }
+}
+
 function json(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);

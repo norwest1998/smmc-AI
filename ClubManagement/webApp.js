@@ -1,10 +1,5 @@
 function doGet(e) {
-
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('Web doGet Datasheet');
-  const data = sheet.getDataRange().getValues();
-  
-  const type = e.parameter.type;
   const action = e.parameter.action;
   const sheetName = e.parameter.sheet;
 
@@ -15,181 +10,88 @@ function doGet(e) {
     return json({ values });
   }
 
-  const title = sheet.getRange('A1').getDisplayValue() || 'Race Day';
-  const raceInfo = sheet.getRange('B2').getValue();
+  // --- Member Management page data feeds ---
+  if (action === "membersForManagement") {
+    return json({ members: getMembersForPaidList() });
+  }
 
-  let cardsHtml = ''; 
+  if (action === "activeMembers") {
+    return json({ members: getMembers("active") });
+  }
 
-  if(type === "display") {
-    // =========================
-    // NO EVENTS CASE
-    // =========================
-    if (raceInfo === "No Events scheduled for the weekend") {
-      cardsHtml = `
-        <div class="race-card no-events">
-          <img class="race-bg" src="${DEFAULT_BG_IMAGE}" alt="">
-          <div class="card-content">
-            <div class="heading">
-              <h2>${raceInfo}</h2>
-            </div>
-          </div>
-        </div>
-      `;
-
-      return HtmlService.createHtmlOutput(injectStyle(renderPage(title, cardsHtml)))
-        .setTitle(title)
-        .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+  const hexCode = (e && e.parameter) ? (e.parameter.id || e.parameter.hexCode || e.parameter.code || "") : "";  
+  if (hexCode){
+    const template = HtmlService.createTemplateFromFile('Index');
+    template.data = { hexCode: hexCode };
+    
+    return template.evaluate()
+        .setTitle("SMMC Details Update")
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-
-    }
-  }
-
-  // =========================
-  // LOAD RACE DATA
-  // =========================
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) {
-    return HtmlService.createHtmlOutput(injectStyle(renderPage(title, '<p>No race data found</p>')));
-  }
-
-  const raceData = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
-
-  // =========================
-  // WEATHER DATA (HOURLY)
-  // =========================
-  const props = PropertiesService.getScriptProperties();
-  const weatherSSId = props.getProperty('WZHourlyID');
-  if (!weatherSSId) {
-    return HtmlService.createHtmlOutput(injectStyle(renderPage(title, '<p>Weather spreadsheet ID not set</p>')));
-  }
-
-  const weatherSS = SpreadsheetApp.openById(weatherSSId);
-  const weatherSheet = weatherSS.getSheetByName('WZ Hourly Data');
-  if (!weatherSheet) {
-    return HtmlService.createHtmlOutput(injectStyle(renderPage(title, '<p>Weather sheet not found</p>')));
-  }
-
-  const weatherData = weatherSheet.getDataRange().getValues();
-
-  // =========================
-  // WEATHER DATA (DAILY FORECAST) — used as fallback
-  // =========================
-  const dailySheet = weatherSS.getSheetByName('WZ Daily Forecast');
-  const dailyData = dailySheet ? dailySheet.getDataRange().getValues() : [];
-
-  if (e.parameter.type === "data") {
-        const date = data[0][0];
-        const events = [];
-        for (let i = 1; i < data.length; i++) {
-          var event = data[i];
-          events.push({
-            date: date, 
-            name: event[0],
-            start: event[1],
-            end: event[2],
-            eventClass: event[3],
-            eventFormat: event[5]
-          });
-        }
-        const payload = { events: events, weatherData: weatherData };
-        return ContentService.createTextOutput(JSON.stringify(payload))
-          .setMimeType(ContentService.MimeType.JSON);
   } else {
-
-    // =========================
-    // BUILD RACE CARDS (LOOP)
-    // =========================
-
-    raceData.forEach(row => {
-
-      const regattaName = row[0];
-      if (!regattaName) return;
-
-      const startTime = row[1];
-      const endTime = row[2];
-
-      const startDisplay = Utilities.formatDate(startTime, Session.getScriptTimeZone(), 'HH:mm');
-      const endDisplay   = Utilities.formatDate(endTime, Session.getScriptTimeZone(), 'HH:mm');
-
-      const raceDate = new Date(title); // Saturday
-      Logger.log("Race day: " + raceDate);
-      const bgImage = getWeatherPic(raceDate);
-
-      let weatherRow = '';
-
-      // --- HOURLY WEATHER LOOP (unchanged logic) ---
-      let hourlyHtml = '';
-      for (let i = 1; i < weatherData.length; i++) {
-        const w = weatherData[i];
-        if (!(w[0] instanceof Date)) continue;
-
-        const weatherTime = w[0];
-        if (weatherTime < startTime || weatherTime > endTime) continue;
-        var wind = w[2] + getWindArrow(w[1]);
-        var temp = Math.round(w[3]);
-        var uvIdx = Math.round(w[9]);
-        var uvColor = getUVColor(uvIdx);
-        var tempColor = getTempColor(temp);
-
-        const time = Utilities.formatDate(w[0], Session.getScriptTimeZone(), 'HH:mm');
-        hourlyHtml += `
-          <div class="weather-mini-card">
-            <div class="time">${time}</div>
-            <div class="temp">
-              <span class="temp" style="color: ${tempColor};">
-                ${temp}°
-              </span>
-            </div>
-            <div class="wind">${wind}</div>
-            <div class="rain">${(w[6] || 0)} mm</div>
-            <div class="uvRow">
-              <span class="uvVal" style="color: ${uvColor};">
-                UV ${uvIdx}
-              </span>
-            </div>
-          </div>
-        `;
-      }
-
-      if (hourlyHtml) {
-        weatherRow = `<div class="weather-cards-row">${hourlyHtml}</div>`;
-      } else {
-        const dailySummary = buildDailySummaryHtml(dailyData, raceDate);
-        weatherRow = dailySummary ||
-          '<div class="no-data">No weather data available</div>';
-      }
-
-      // --- CARD HTML ---
-      cardsHtml += `
-        <div class="race-card">
-          <img class="race-bg" src="${bgImage}" alt="">
-          <div class="card-content">
-            <div class="heading">
-              <h2>${regattaName}</h2>
-            </div>
-            <div class="race-time">${startDisplay} – ${endDisplay}</div>
-            ${weatherRow}
-          </div>
-        </div>
-      `;
-
-    });
-
-    // =========================
-    // FINAL RENDER
-    // =========================
-    return HtmlService.createHtmlOutput(injectStyle(renderPage(title, cardsHtml)))
-      .setTitle(title)
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1') 
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    memberList()
   }
 }
-
-
 
 function doPost(e) {
   const body = JSON.parse(e.postData.contents);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // --- Member Management actions (no body.sheet required) ---
+  if (body.action === "markPaid") {
+    try {
+      const result = markPaid(body.row, body.isPaid);
+      logAudit("markPaid", "Members", `Row ${body.row}`, "", body.isPaid, "success", result);
+      return json({ success: true, message: result });
+    } catch (err) {
+      logAudit("markPaid", "Members", `Row ${body.row}`, "", body.isPaid, "error", err.message);
+      return json({ error: err.message });
+    }
+  }
+
+  if (body.action === "updatePaidBatch") {
+    try {
+      const count = updatePaidMembersBatch(body.updates);
+      logAudit("updatePaidBatch", "Members", `${count} row(s)`, "", "", "success", `${count} member(s) updated`);
+      return json({ success: true, count });
+    } catch (err) {
+      logAudit("updatePaidBatch", "Members", "", "", "", "error", err.message);
+      return json({ error: err.message });
+    }
+  }
+
+  if (body.action === "sendUpdateRequest") {
+    try {
+      const result = processEmailRequest(body.member);
+      logAudit("sendUpdateRequest", "Members", body.member.email, "", "", "success", "Update request sent");
+      return json(result);
+    } catch (err) {
+      logAudit("sendUpdateRequest", "Members", body.member && body.member.email, "", "", "error", err.message);
+      return json({ error: err.message });
+    }
+  }
+
+  if (body.action === "requestAllUpdates") {
+    try {
+      sendUpdateEmails(); // sendUpdateRequests(false)
+      logAudit("requestAllUpdates", "Members", "All active", "", "", "success", "Update request sent to all active members");
+      return json({ success: true });
+    } catch (err) {
+      logAudit("requestAllUpdates", "Members", "All active", "", "", "error", err.message);
+      return json({ error: err.message });
+    }
+  }
+
+  if (body.action === "sendRenewals") {
+    try {
+      sendRenewEmails(); // sendUpdateRequests(true)
+      logAudit("sendRenewals", "Members", "All active", "", "", "success", "Renewal email sent to all active members");
+      return json({ success: true });
+    } catch (err) {
+      logAudit("sendRenewals", "Members", "All active", "", "", "error", err.message);
+      return json({ error: err.message });
+    }
+  }
+
   const sheet = ss.getSheetByName(body.sheet);
 
   if (body.action === "update") {
@@ -216,3 +118,33 @@ function doPost(e) {
   return json({ error: "Unknown action" }, 400);
 }
 
+// MAIN FRONTEND API CALL
+function getInitialData(hexCode) {
+  try {
+    if (!hexCode) {
+      return { status: "Error", message: "No security ID provided in link." };
+    }
+
+    const memberEmail = getEmailFromTrackingCode(hexCode);
+    if (!memberEmail) {
+      return { status: "Error", message: "Invalid or expired link code: " + hexCode };
+    }
+
+    const data = getMemberAndBoatData(memberEmail);
+    if (!data || !data.member) {
+      return { status: "Error", message: "No member record found for email: " + memberEmail };
+    }
+
+    const classList = getClasses();
+
+    return {
+      status: "Success",
+      hexCode: hexCode,
+      member: data.member,
+      boats: data.boats || [],
+      classes: classList || []
+    };
+  } catch (err) {
+    return { status: "Error", message: "Server Error: " + err.toString() };
+  }
+}

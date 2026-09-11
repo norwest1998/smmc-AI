@@ -39,7 +39,9 @@ function sendUpdateRequests(renew) {
       const hexCode = generateHexCode();
       const personalLink = `${WEB_APP_URL}?id=${hexCode}`;
 
-      const membershipFee = membership ? "Full"| annualFee + nswryaFee : annualFee;
+      const membershipFee = (String(membership).trim().toLowerCase() === "full")
+        ? (annualFee + nswryaFee)
+        : annualFee;
 
       let renewmsg = `It's membership renewal time again, please pay the annual membership fees of $${membershipFee} into the bank account:\n
         Bank: ANZ\n

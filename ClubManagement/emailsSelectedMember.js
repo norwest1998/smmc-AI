@@ -60,7 +60,7 @@ function processEmailRequest(member) {
 }
 
 function processPaymentReceived(name, email) {
-  if (!member || !member.id || !member.email) {
+  if (!name || !email) {
     throw new Error("Invalid member details provided.");
   }
 
@@ -68,7 +68,8 @@ function processPaymentReceived(name, email) {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let trackingSheet = ss.getSheetById(TrackingSheetId);
-  let expiryDate = ss.getNamedRanges("financialYearEnd");
+  const expiryRaw = ss.getRangeByName("financialYearEnd").getValue();
+  let expiryDate = Utilities.formatDate(new Date(expiryRaw), ss.getSpreadsheetTimeZone(), 'dd/MM/yyyy');
 
   const subject = "Payment received: Membership renewed";
   const htmlBody = `
