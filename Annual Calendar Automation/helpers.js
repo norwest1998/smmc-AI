@@ -235,7 +235,7 @@ function renderPage(title, bodyContent) {
     /* 6. RACE CARD STYLES */
     .race-card {
       position: relative;
-      width: 100%;
+      width: auto;
       max-width: 420px;
       background: linear-gradient(
         to bottom,
