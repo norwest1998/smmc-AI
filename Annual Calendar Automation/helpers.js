@@ -235,7 +235,7 @@ function renderPage(title, bodyContent) {
     /* 6. RACE CARD STYLES */
     .race-card {
       position: relative;
-      width: auto;
+      width: 100%;
       max-width: 420px;
       background: linear-gradient(
         to bottom,
@@ -273,6 +273,13 @@ function renderPage(title, bodyContent) {
       height: 100%;
       object-fit: cover;
       z-index: 0;
+    }
+
+    .race-card .weather-panel--hourly{
+      display:grid;
+      grid-template-columns:repeat(3, 1fr);
+      gap:10px;
+      width:100%;
     }
 
     .race-card::before {
@@ -318,6 +325,9 @@ function renderPage(title, bodyContent) {
       flex: 0 0 80px;
       max-width: 110px;
       font-size: 14px;
+      width:auto;              
+      flex-direction:column;
+      margin-top:0;   
     }
 
     .time {
