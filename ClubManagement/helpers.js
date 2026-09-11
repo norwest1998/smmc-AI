@@ -374,7 +374,7 @@ function createDateObject(input){
 // Regional Conflicts Checker for Sailing Club Calendar
 // Checks Radio Sailing Australia website for conflicting events
 
-function onOpen() {
+function buildMenu() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('Tools')
     .addItem('Check Regional Conflicts', 'checkRegionalConflicts')
