@@ -2,6 +2,14 @@ function applySeriesFormatting(sheetID, sheetName) {
   const ss = SpreadsheetApp.openById(sheetID);
   const sh = ss.getSheetByName(sheetName);
 
+  if (!sh) {
+    console.log(`applySeriesFormatting: Sheet "${sheetName}" not found in book ${sheetID}`);
+    return;
+  }
+
+  Logger.log("Formatting: " + sheetName);
+  console.log("Formatting: " + sheetName);
+
   const lastRow = sh.getLastRow();
   const lastCol = sh.getLastColumn();
 
@@ -15,16 +23,19 @@ function applySeriesFormatting(sheetID, sheetName) {
   const bodyRowStart = OVERALL_DATA_START_ROW;
   const roundColStart = lastHdrCol + 1;
 
+  // Ensure physical grid is large enough for standard layout (rows 1-7, cols 1-7) & active data
+  const requiredRows = Math.max(lastRow, bodyRowStart);
+  const requiredCols = Math.max(lastCol, lastHdrCol);
+
+  if (sh.getMaxRows() < requiredRows) {
+    sh.insertRowsAfter(sh.getMaxRows(), requiredRows - sh.getMaxRows());
+  }
+  if (sh.getMaxColumns() < requiredCols) {
+    sh.insertColumnsAfter(sh.getMaxColumns(), requiredCols - sh.getMaxColumns());
+  }
+
   const bodyCount = Math.max(0, lastRow - bodyRowStart + 1);
   const roundColCount = Math.max(0, lastCol - lastHdrCol);
-
-  // Ensure grid has enough rows and columns for formatting ranges
-  if (sh.getMaxRows() < lastRow) {
-    sh.insertRowsAfter(sh.getMaxRows(), lastRow - sh.getMaxRows());
-  }
-  if (sh.getMaxColumns() < Math.max(lastCol, lastHdrCol)) {
-    sh.insertColumnsAfter(sh.getMaxColumns(), Math.max(lastCol, lastHdrCol) - sh.getMaxColumns());
-  }
 
   // Spacer row/column sizing (rows 1-2, 5-6)
   sh.setRowHeight(1, 10);
@@ -85,9 +96,11 @@ function applySeriesFormatting(sheetID, sheetName) {
     }
   }
 
+  // Trim excess columns beyond standard headers and round columns
   const maxCols = sh.getMaxColumns();
-  if (maxCols > lastCol && maxCols > 7) {
-    sh.deleteColumns(Math.max(lastCol, 7) + 1, maxCols - Math.max(lastCol, 7));
+  const keepCols = Math.max(lastCol, lastHdrCol);
+  if (maxCols > keepCols) {
+    sh.deleteColumns(keepCols + 1, maxCols - keepCols);
   }
 }
 
