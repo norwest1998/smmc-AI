@@ -1,11 +1,11 @@
-function applySeriesFormatting(sheetID, raceType) {
+function applySeriesFormatting(sheetID, sheetName) {
   const ss = SpreadsheetApp.openById(sheetID);
-  const sh = ss.getSheetByName(raceType);
+  const sh = ss.getSheetByName(sheetName);
 
-  const lastRow = Math.max(sh.getMaxRows(), OVERALL_DATA_START_ROW);
-  const lastCol = Math.max(sh.getMaxColumns(), 7);
+  const lastRow = sh.getLastRow();
+  const lastCol = sh.getLastColumn();
 
-  if (lastRow < OVERALL_DATA_START_ROW || lastCol < 1) {
+  if (lastRow < OVERALL_DATA_START_ROW || lastCol < 2) {
     console.log('applySeriesFormatting: not enough data to format');
     return;
   }
@@ -17,6 +17,14 @@ function applySeriesFormatting(sheetID, raceType) {
 
   const bodyCount = Math.max(0, lastRow - bodyRowStart + 1);
   const roundColCount = Math.max(0, lastCol - lastHdrCol);
+
+  // Ensure grid has enough rows and columns for formatting ranges
+  if (sh.getMaxRows() < lastRow) {
+    sh.insertRowsAfter(sh.getMaxRows(), lastRow - sh.getMaxRows());
+  }
+  if (sh.getMaxColumns() < Math.max(lastCol, lastHdrCol)) {
+    sh.insertColumnsAfter(sh.getMaxColumns(), Math.max(lastCol, lastHdrCol) - sh.getMaxColumns());
+  }
 
   // Spacer row/column sizing (rows 1-2, 5-6)
   sh.setRowHeight(1, 10);
@@ -62,7 +70,7 @@ function applySeriesFormatting(sheetID, raceType) {
     });
   }
 
-  if (roundColCount > 0 && lastRow > 1) {
+  if (roundColCount > 0 && lastRow >= bodyRowStart) {
     const roundRange = sh.getRange(OVERALL_META_ROW_1, roundColStart, lastRow - OVERALL_META_ROW_1 + 1, roundColCount);
     roundRange.setHorizontalAlignment("center");
 
@@ -78,8 +86,8 @@ function applySeriesFormatting(sheetID, raceType) {
   }
 
   const maxCols = sh.getMaxColumns();
-  if (maxCols > lastCol) {
-    sh.deleteColumns(lastCol + 1, maxCols - lastCol);
+  if (maxCols > lastCol && maxCols > 7) {
+    sh.deleteColumns(Math.max(lastCol, 7) + 1, maxCols - Math.max(lastCol, 7));
   }
 }
 

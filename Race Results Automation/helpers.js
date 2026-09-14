@@ -1,3 +1,12 @@
+function clearRoundColumn(sh, roundColIdx, dataRowCount) {
+  const lastRow = OVERALL_META_ROW_1;
+  sh.getRange(OVERALL_META_ROW_1, roundColIdx).clearContent();
+  sh.getRange(OVERALL_META_ROW_2, roundColIdx).clearContent();
+  sh.getRange(OVERALL_HEADER_ROW, roundColIdx).clearContent();
+  if (dataRowCount > 0) {
+    sh.getRange(OVERALL_DATA_START_ROW, roundColIdx, dataRowCount, 1).clearContent();
+  }
+}
 /**
  * Checks the Overall Results sheet for missing members and adds them,
  * backfilling any previously completed rounds with the DNC score for that round.

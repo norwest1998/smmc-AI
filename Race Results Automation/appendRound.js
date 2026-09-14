@@ -33,6 +33,11 @@ function writeRoundColumn(sh, parsed, rankedScores, roundCount, lastRow) {
     sh.insertRowsAfter(sh.getMaxRows(), expectedLastRow - sh.getMaxRows());
   }
 
+  // Guard: ensure sheet has enough COLUMNS before writing
+  if (sh.getMaxColumns() < roundColIdx) {
+    sh.insertColumnsAfter(sh.getMaxColumns(), roundColIdx - sh.getMaxColumns());
+  }
+
   sh.getRange(OVERALL_META_ROW_1, roundColIdx).setValue(dncScore);
   sh.getRange(OVERALL_META_ROW_2, roundColIdx).setValue(parsed.date);
   sh.getRange(OVERALL_HEADER_ROW, roundColIdx).setValue(roundLabel);
@@ -125,6 +130,18 @@ function appendHCRound(bookID, parsed, handicaps) {
     return match ? [match.adj] : ['-'];
   });
 
+  // Guard: ensure sheet has enough ROWS before writing
+  const expectedLastRow = OVERALL_DATA_START_ROW - 1 + hcapToPoint.length;
+  if (hs.getMaxRows() < expectedLastRow) {
+    hs.insertRowsAfter(hs.getMaxRows(), expectedLastRow - hs.getMaxRows());
+  }
+
+  // Guard: ensure sheet has enough COLUMNS before writing (fixes trim-by-formatting bug)
+  if (hs.getMaxColumns() < roundColIdx) {
+    hs.insertColumnsAfter(hs.getMaxColumns(), roundColIdx - hs.getMaxColumns());
+  }
+  clearRoundColumn(hs, roundColIdx, hcapToPoint.length);
+
   hs.getRange(OVERALL_META_ROW_2, roundColIdx).setValue(formatDate(parsed.date));
   hs.getRange(OVERALL_HEADER_ROW, roundColIdx).setValue(roundLabel);
   hs.getRange(OVERALL_DATA_START_ROW, roundColIdx, hcapToPoint.length, 1).setValues(hcapToPoint);
@@ -135,7 +152,7 @@ function appendHCRound(bookID, parsed, handicaps) {
   hs.getRange(OVERALL_META_ROW_2, 4).setValue(roundCount);
 
   // Recalculate the Handicaps sheet
-  const hcapRange = hs.getRange(OVERALL_DATA_START_ROW, 8, dataRowCount, roundCount).getValues();
+  const hcapRange = hs.getRange(OVERALL_DATA_START_ROW, 8, hcapToPoint.length, roundCount).getValues();
 
   const finalHandicaps = hcapRange.map(rowScores => {
     let attendanceCount = 0;
@@ -155,9 +172,10 @@ function appendHCRound(bookID, parsed, handicaps) {
   const summaryHcap = finalHandicaps.map(res => [res.adj]);
   hs.getRange(OVERALL_DATA_START_ROW, 6, summaryHcap.length, 1).setValues(summaryHcap);
 
-  const curHcapRange = hs.getRange(OVERALL_DATA_START_ROW, 7, dataRowCount, 1);
+  const newLastRow = OVERALL_DATA_START_ROW - 1 + hcapToPoint.length;
+  const curHcapRange = hs.getRange(OVERALL_DATA_START_ROW, 7, hcapToPoint.length, 1);
   const curHcaps = [];
-  for (let i = OVERALL_DATA_START_ROW; i <= hsLastRow; i++) {
+  for (let i = OVERALL_DATA_START_ROW; i <= newLastRow; i++) {
     if (typeof hs.getRange(i, 5).getValue() === 'number') {
       const currentHcap = Math.max(0, hs.getRange(i, 5).getValue() + hs.getRange(i, 6).getValue());
       curHcaps.push([currentHcap]);
@@ -169,7 +187,7 @@ function appendHCRound(bookID, parsed, handicaps) {
 
   // Sort the Handicaps sheet
   const hslastCol = hs.getLastColumn();
-  const hcapSort = hs.getRange(OVERALL_DATA_START_ROW, 2, dataRowCount, hslastCol - 1);
+  const hcapSort = hs.getRange(OVERALL_DATA_START_ROW, 2, hcapToPoint.length, hslastCol - 1);
   hcapSort.sort({ column: 7, ascending: false });
 
   console.log(roundLabel + " added to Handicaps to Overall Results sheet");

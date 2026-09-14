@@ -57,6 +57,7 @@ function processNewRegattaSheets(parsed, raceType) {
     return "Success";
 
   } catch (e) {
+    ctx.log(`STACK: ${e.stack}`);
     ctx.fail(e);
     rollbackRoundContext(ctx);
     throw e; // propagate so doPost reports failure to caller
