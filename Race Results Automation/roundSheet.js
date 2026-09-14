@@ -170,7 +170,7 @@ if (isCorrection) {
   const archiveRows = [];
   rankedScores.forEach((sc, index) => {
     const row = [index + 1, sc.sail, sc.member, sc.net];
-    const boatId = getBoatId(sc.sail, memId, parsed.className);
+    const boatId = getBoatId(sc.sail, sc.member, parsed.className);
     sc.placements.forEach((p, rIdx) => {
       const val = (sc.discards && sc.discards[rIdx] === true) ? "'(" + p + ")" : p;
       row.push(val);
@@ -185,7 +185,7 @@ if (isCorrection) {
         roundNumber,
         parsed.className || "",
         parsed.competitorCount,
-        boatID || "",
+        boatId || "",
         sc.sail || "",        
         sc.member || "",
         rIdx + 1, // race number within round

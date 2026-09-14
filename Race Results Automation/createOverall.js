@@ -2,9 +2,9 @@
  * Finds or creates an Overall Results sheet for a regatta type
  */
 function getOrCreateOverall(regattaName, parsed, members, raceType) {
-  
+  const cfg = getConfig();
   // 1. Fetch the season from the "Variables" sheet, cell E2
-  const ss = SpreadsheetApp.openById(AUTOMATION_SHEET_ID);
+  const ss = SpreadsheetApp.openById(cfg.masterDataSpreadsheetId);
   const variablesSheet = ss.getSheetByName("Variables");
     // Check if the Variables sheet actually exists first
   if (!variablesSheet) {
@@ -21,7 +21,6 @@ function getOrCreateOverall(regattaName, parsed, members, raceType) {
     return seriesWorkbookId;
   }
 
-  const cfg = getConfig();
   const overallFolderId = cfg.overallFolderId;
   if (!overallFolderId) {
     Logger.log('ERROR: Overall Folder Id is not configured. File move skipped.');
@@ -49,10 +48,10 @@ function getOrCreateOverall(regattaName, parsed, members, raceType) {
   if (nextRoundNumber !== 1) {
     var roundReset = resetRoundNumber(regattaName)
     if (roundReset) {
-      console.log('Round for ${regattaName} reset to 1');
+      console.log(`Round for ${regattaName} reset to 1`);
     }
     else {
-      console.log('Error resetting round for ${regattaName}');
+      console.log(`Error resetting round for ${regattaName}`);
      }
   }
 
@@ -63,67 +62,61 @@ function getOrCreateOverall(regattaName, parsed, members, raceType) {
 
 function overallSetup(bookID, parsed, members, raceType) {
   const ss = SpreadsheetApp.openById(bookID);
-  
-  // Create Overall Results
   let sh = ss.getSheetByName('Overall Results');
 
-  // Setup Metadata Labels
-  sh.getRange("B2:C2").merge().setValue('Last Race:');
-  sh.getRange("D2").setValue(0);
-  sh.getRange("B3:C3").merge().setValue('Rounds:');
-  sh.getRange("D3").setValue(0);
-  sh.getRange("G2").setValue('DNC').setHorizontalAlignment('right');
+  // Metadata (rows 3-4; rows 1-2 and 5-6 are spacers)
+  sh.getRange(OVERALL_META_ROW_1, 2, 1, 2).merge().setValue('Last Race:');
+  sh.getRange(OVERALL_META_ROW_1, 4).setValue(0);
+  sh.getRange(OVERALL_META_ROW_2, 2, 1, 2).merge().setValue('Rounds:');
+  sh.getRange(OVERALL_META_ROW_2, 4).setValue(0);
+  sh.getRange(OVERALL_META_ROW_1, 7).setValue('DNC').setHorizontalAlignment('right');
 
-  // Headers
+  // Headers (row 7)
   var headers = [['Att', 'Sail #', 'Member Name', 'Rank', 'Total', 'Discard']];
-  sh.getRange("B5:G5").setValues(headers);
+  sh.getRange(OVERALL_HEADER_ROW, 2, 1, 6).setValues(headers);
 
-  // Populate Members
+  // Members (row 8+)
   const memberData = members.map(m => ['', m.sailnumber, m.membername, '', '', '']);
   if (memberData.length > 0) {
-    sh.getRange(6, 2, memberData.length, 6).setValues(memberData);
-    const lastRow = 5 + memberData.length;
+    sh.getRange(OVERALL_DATA_START_ROW, 2, memberData.length, 6).setValues(memberData);
+    const lastRow = OVERALL_DATA_START_ROW - 1 + memberData.length;
     if (sh.getMaxRows() > lastRow) sh.deleteRows(lastRow + 1, sh.getMaxRows() - lastRow);
   }
+
   let rules = sh.getConditionalFormatRules();
-  const range = sh.getRange(6,2, memberData.length,6);
+  const range = sh.getRange(OVERALL_DATA_START_ROW, 2, memberData.length, 6);
   const evenRowRule = SpreadsheetApp.newConditionalFormatRule()
     .whenFormulaSatisfied('=ISEVEN(ROW())')
-    .setBackground('#FFF9C4') // light yellow
+    .setBackground('#FFF9C4')
     .setRanges([range])
     .build();
-
   rules.push(evenRowRule);
   sh.setConditionalFormatRules(rules);
 
   if (raceType === 'Handicap') {
-    // create Handicap sheet
-    let hs = ss.getSheetByName('Handicaps');    
+    let hs = ss.getSheetByName('Handicaps');
     let hsRules = hs.getConditionalFormatRules();
-    const hsRange = hs.getRange(6,2, memberData.length,6);
+    const hsRange = hs.getRange(OVERALL_DATA_START_ROW, 2, memberData.length, 6);
     const hsEvenRowRule = SpreadsheetApp.newConditionalFormatRule()
-    .whenFormulaSatisfied('=ISEVEN(ROW())')
-    .setBackground('#FFF9C4') // light yellow
-    .setRanges([hsRange])
-    .build();
+      .whenFormulaSatisfied('=ISEVEN(ROW())')
+      .setBackground('#FFF9C4')
+      .setRanges([hsRange])
+      .build();
 
-    // Setup Metadata Labels
-    hs.getRange("B2:C2").merge().setValue('Last Race:');
-    hs.getRange("D2").setValue(0);
-    hs.getRange("B3:C3").merge().setValue('Rounds:');
-    hs.getRange("D3").setValue(0);
+    hs.getRange(OVERALL_META_ROW_1, 2, 1, 2).merge().setValue('Last Race:');
+    hs.getRange(OVERALL_META_ROW_1, 4).setValue(0);
+    hs.getRange(OVERALL_META_ROW_2, 2, 1, 2).merge().setValue('Rounds:');
+    hs.getRange(OVERALL_META_ROW_2, 4).setValue(0);
 
-    // Headers
-    headers = [['Att', 'Sail #', 'Member Name', 'Starting Hcap','Adj','Current Hcap']];
-    hs.getRange("B5:G5").setValues(headers);
+    headers = [['Att', 'Sail #', 'Member Name', 'Starting Hcap', 'Adj', 'Current Hcap']];
+    hs.getRange(OVERALL_HEADER_ROW, 2, 1, 6).setValues(headers);
 
-    // Populate Members
     const memberHcapData = members.map(m => ['', m.sailnumber, m.membername, m.hcap, '', '']);
-    if (memberData.length > 0) {
-      hs.getRange(6, 2, memberHcapData.length, 6).setValues(memberHcapData);
-      const lastRow = 5 + memberHcapData.length;
+    if (memberHcapData.length > 0) {
+      hs.getRange(OVERALL_DATA_START_ROW, 2, memberHcapData.length, 6).setValues(memberHcapData);
+      const lastRow = OVERALL_DATA_START_ROW - 1 + memberHcapData.length;
       if (hs.getMaxRows() > lastRow) hs.deleteRows(lastRow + 1, hs.getMaxRows() - lastRow);
-    } 
+    }
     hsRules.push(hsEvenRowRule);
     hs.setConditionalFormatRules(hsRules);
   }

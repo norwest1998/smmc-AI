@@ -185,17 +185,11 @@ function buildScoresFromRaces(parsed, membersData, raceType) {
     }
     
   });
-  
-  // Calculate gross totals
-  Object.keys(sailResults).forEach(sailNum => {
-    const result = sailResults[sailNum].racescore;
-    sailResults[sailNum].gross = result.reduce((sum, score) => sum + score, 0);
-  });
 
   // Convert to array and sort by gross score
   const scores = Object.values(sailResults);
-  scores.sort((a, b) => a.gross - b.gross);
-  
+  const discardCount = getDiscardCount(raceCount);
+
   const updatedHandicaps = Object.values(sailResults).map(r => ({
     member: r.member,
     boatId: r.boatId,  
@@ -207,33 +201,14 @@ function buildScoresFromRaces(parsed, membersData, raceType) {
   /* ---------------------------
    * Discards & totals
    * --------------------------- */
-  const discardCount = getDiscardCount(raceCount);
 
   scores.forEach(sc => {
-    // 1. Map scores to objects so we can track their original index after sorting
-    const indexedScores = sc.racescore.map((score, index) => ({
-      score: score,
-      index: index
-    }));
-
-    // 2. Sort by score descending (highest scores first are the candidates for discard)
-    indexedScores.sort((a, b) => b.score - a.score);
-
-    // 3. Initialize the discards array with 'false' for all races
-    sc.discards = new Array(raceCount).fill(false);
-    let discardedSum = 0;
-
-    // 4. Mark the top N scores as discarded
-    for (let i = 0; i < discardCount; i++) {
-      const discardIndex = indexedScores[i].index;
-      sc.discards[discardIndex] = true; // Mark this specific race as a discard
-      discardedSum += indexedScores[i].score;
-    }
-
-    // 5. Calculate net total
-    sc.net = sc.gross - discardedSum;
+    const { gross, net, discardFlags } = calculateNetWithDiscards(sc.racescore, discardCount);
+    sc.gross = gross;
+    sc.net = net;
+    sc.discards = discardFlags;
   });
-  
+
   scores.sort((a, b) => a.net - b.net);
 
   return {

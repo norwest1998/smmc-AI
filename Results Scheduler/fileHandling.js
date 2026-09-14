@@ -50,76 +50,26 @@ function parseSimplifiedRegattaSheet(fileId) {
   const ss = SpreadsheetApp.openById(fileId);
   const sheet = ss.getSheets()[0];
 
-  // is json?
   const cellValue = sheet.getRange("A1").getValue();
   const data = JSON.parse(cellValue);
 
-  if (!(data.eventID)){
-    Logger.log("not json data");
+  if (!data.eventID) {
+    console.log("not json data");
   }
 
-  const eventID = data.eventID;
-  const regattaName = data.regattaName;
-  const className = data.className;
-  const date = data.regattaDate;
-  const competitorCount = data.competitorCount;
-  var raceReport = data.raceReport;
-  if(!raceReport) {
-    var raceReportDate = formatDate(data.regattaDate);
-    raceReport = `Race results for ${regattaName} sailed on the ${raceReportDate}`;
+  let raceReport = data.raceReport;
+  if (!raceReport) {
+    const raceReportDate = formatDate(data.regattaDate);
+    raceReport = `Race results for ${data.regattaName} sailed on the ${raceReportDate}`;
   }
-  
-  const raceData = data.races;
-  const races = {};
-
-  // 1. Map every race result to the specific boat
-  raceData.forEach((race, raceIdx) => {
-    const raceNum = race.raceNumber;
-
-    // Process Finishers (Results are top-down, so index + 1 = position)
-    race.positions.forEach((sailNum, index) => {
-      initSail(races, sailNum, raceData.length);
-      races[sailNum][`race_${raceNum}`] = index + 1; 
-    });
-
-    // Process DNS (Did Not Start)
-    if (race.dns) {
-      const dnsSails = Array.isArray(race.dns) ? race.dns : [race.dns];
-      dnsSails.forEach(sailNum => {
-        initSail(races, sailNum, raceData.length);
-        races[sailNum][`race_${raceNum}`] = "DNS";
-      });
-    }
-
-    // Process DNF (Did Not Finish)
-    if (race.dnf) {
-      const dnfSails = Array.isArray(race.dnf) ? race.dnf : [race.dnf];
-      dnfSails.forEach(sailNum => {
-        initSail(races, sailNum, raceData.length);
-        races[sailNum][`race_${raceNum}`] = "DNF";
-      });
-    }
-  });
 
   return {
-    eventID,
-    regattaName,
-    className,
-    date,
-    competitorCount,
+    eventID: data.eventID,
+    regattaName: data.regattaName,
+    className: data.className,
+    date: data.regattaDate,
+    competitorCount: data.competitorCount,
     raceReport,
-    races: raceData
+    races: data.races
   };
-
-}
-
-// Helper to ensure the boat exists
-function initSail(obj, sailNum, totalRaces) {
-  if (!obj[sailNum]) {
-    obj[sailNum] = { sailNumber: sailNum };
-    // Initialize all races as null/empty
-    for (let i = 1; i <= totalRaces; i++) {
-      obj[sailNum][`race_${i}`] = "-";
-    }
-  }
 }

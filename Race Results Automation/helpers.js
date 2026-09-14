@@ -8,57 +8,42 @@ function ensureMembersInOverall(bookID, rankedScores, raceType) {
   const lastRow = sh.getLastRow();
   const lastCol = sh.getLastColumn();
 
-  // Get existing member names from column D
-  const existingNames = lastRow >= 6
-    ? sh.getRange(6, 4, lastRow - 5, 1).getValues().flat().map(n =>
-        String(n).trim().toLowerCase())
-    : [];
+  const existingNames = lastRow >= OVERALL_DATA_START_ROW
+    ? new Set(sh.getRange(OVERALL_DATA_START_ROW, 4, lastRow - OVERALL_DATA_START_ROW + 1, 1)
+        .getValues().flat().map(normalizeName))
+    : new Set();
 
-  // Find members in this round's scores who aren't in the sheet yet
   const newMembers = rankedScores.filter(sc =>
-    sc.member && !existingNames.includes(String(sc.member).trim().toLowerCase())
+    sc.member && !existingNames.has(normalizeName(sc.member))
   );
 
   if (newMembers.length === 0) return;
 
-  Logger.log(`Found ${newMembers.length} new member(s) to add to Overall Results: ` +
+  console.log(`Found ${newMembers.length} new member(s) to add to Overall Results: ` +
     newMembers.map(m => m.member).join(', '));
 
-  // --- Determine how many rounds have already been recorded ---
-  // Round DNC values are stored in row 2 starting at column 8 (H)
-  // Each round column has its DNC score written by appendRound at sh.getRange(2, roundColIdx)
-  const roundColStart = 8; // Column H is where round data begins
+  const roundColStart = 8; // column, unaffected by row layout
   const completedRoundCount = lastCol >= roundColStart ? lastCol - roundColStart : 0;
 
-  // Read the DNC values for each completed round from row 2
   let dncByRound = [];
   if (completedRoundCount > 0) {
-    dncByRound = sh.getRange(2, roundColStart, 1, completedRoundCount)
-                   .getValues()[0];
+    dncByRound = sh.getRange(OVERALL_META_ROW_1, roundColStart, 1, completedRoundCount).getValues()[0];
   }
 
-  // --- Append new member rows ---
   const insertAt = lastRow + 1;
   const newRows = newMembers.map(m => ['', m.sail, m.member, '', '', '']);
   sh.getRange(insertAt, 2, newRows.length, 6).setValues(newRows);
 
-  // --- Backfill completed rounds with DNC scores ---
   if (completedRoundCount > 0) {
     newMembers.forEach((m, rowOffset) => {
       const sheetRow = insertAt + rowOffset;
-      const dncFill = dncByRound.map(dncVal => [dncVal]);
-
-      // Write the DNC value into each completed round column for this new member
-      sh.getRange(sheetRow, roundColStart, 1, completedRoundCount)
-        .setValues([dncByRound.map(dncVal => dncVal)]);
-
-      Logger.log(`Backfilled ${completedRoundCount} round(s) with DNC for: ${m.member}`);
+      sh.getRange(sheetRow, roundColStart, 1, completedRoundCount).setValues([dncByRound]);
+      console.log(`Backfilled ${completedRoundCount} round(s) with DNC for: ${m.member}`);
     });
   }
 
-  // --- Reapply even-row conditional formatting across full body ---
   const newLastRow = sh.getLastRow();
-  const fullBodyRange = sh.getRange(6, 2, newLastRow - 5, 6);
+  const fullBodyRange = sh.getRange(OVERALL_DATA_START_ROW, 2, newLastRow - OVERALL_DATA_START_ROW + 1, 6);
   const evenRowRule = SpreadsheetApp.newConditionalFormatRule()
     .whenFormulaSatisfied('=ISEVEN(ROW())')
     .setBackground('#FFF9C4')
@@ -66,39 +51,34 @@ function ensureMembersInOverall(bookID, rankedScores, raceType) {
     .build();
   sh.setConditionalFormatRules([evenRowRule]);
 
-  // --- Mirror into Handicaps sheet if needed ---
   if (raceType === 'Handicap') {
     const hs = ss.getSheetByName('Handicaps');
     if (hs) {
       const hsLastRow = hs.getLastRow();
-      const hsExistingNames = hsLastRow >= 6
-        ? hs.getRange(6, 4, hsLastRow - 5, 1).getValues().flat().map(n =>
-            String(n).trim().toLowerCase())
-        : [];
+      const hsExistingNames = hsLastRow >= OVERALL_DATA_START_ROW
+        ? new Set(hs.getRange(OVERALL_DATA_START_ROW, 4, hsLastRow - OVERALL_DATA_START_ROW + 1, 1)
+            .getValues().flat().map(normalizeName))
+        : new Set();
 
-      const hsNewMembers = newMembers.filter(m =>
-        !hsExistingNames.includes(String(m.member).trim().toLowerCase())
-      );
+      const hsNewMembers = newMembers.filter(m => !hsExistingNames.has(normalizeName(m.member)));
 
       if (hsNewMembers.length > 0) {
         const hsInsertAt = hsLastRow + 1;
         const hsNewRows = hsNewMembers.map(m => ['', m.sail, m.member, m.hcap || 0, '', '']);
         hs.getRange(hsInsertAt, 2, hsNewRows.length, 6).setValues(hsNewRows);
 
-        // Backfill Handicaps sheet rounds with '-' (no adjustment, they weren't there)
         const hsLastCol = hs.getLastColumn();
         const hsCompletedRounds = hsLastCol >= roundColStart ? hsLastCol - roundColStart : 0;
         if (hsCompletedRounds > 0) {
           hsNewMembers.forEach((m, rowOffset) => {
             const hsSheetRow = hsInsertAt + rowOffset;
-            const blankFill = Array(hsCompletedRounds).fill('-');
             hs.getRange(hsSheetRow, roundColStart, 1, hsCompletedRounds)
-              .setValues([blankFill]);
+              .setValues([Array(hsCompletedRounds).fill('-')]);
           });
         }
 
         const hsNewLastRow = hs.getLastRow();
-        const hsFullBodyRange = hs.getRange(6, 2, hsNewLastRow - 5, 6);
+        const hsFullBodyRange = hs.getRange(OVERALL_DATA_START_ROW, 2, hsNewLastRow - OVERALL_DATA_START_ROW + 1, 6);
         const hsEvenRowRule = SpreadsheetApp.newConditionalFormatRule()
           .whenFormulaSatisfied('=ISEVEN(ROW())')
           .setBackground('#FFF9C4')
@@ -106,12 +86,12 @@ function ensureMembersInOverall(bookID, rankedScores, raceType) {
           .build();
         hs.setConditionalFormatRules([hsEvenRowRule]);
 
-        Logger.log(`Added ${hsNewMembers.length} new member(s) to Handicaps sheet.`);
+        console.log(`Added ${hsNewMembers.length} new member(s) to Handicaps sheet.`);
       }
     }
   }
 
-  Logger.log('New member rows inserted and backfilled successfully.');
+  console.log('New member rows inserted and backfilled successfully.');
 }
 
 function getBoatId(sail, memberName, className) {
@@ -121,9 +101,9 @@ function getBoatId(sail, memberName, className) {
 
   const memberData = sheet.getDataRange().getValues();
 
-  for (let i = 1; i <= memberData.length; i++) {
-    if (memberData[2][i] === memberName && memberData[4][i] === sail && memberData[3][i] === className) {
-      return memberData[0][i];
+  for (let i = 1; i < memberData.length; i++) {
+    if (memberData[i][2] === memberName && memberData[i][4] === sail && memberData[i][3] === className) {
+      return memberData[i][0];
     }
   }
   return "Boat Id not found";
@@ -191,19 +171,10 @@ function lookupEventID(raceDate, className) {
 function findMemberByClassAndSail(className, sail, classMembersMap) {
   if (!className || !sail) return null;
 
-  // Use the cached version
-  const classKey = className.toString().trim();
-
-  const boats = classMembersMap[classKey];
+  const boats = classMembersMap[String(className).trim()];
   if (!boats || boats.length === 0) return null;
 
-  const sailStr = sail.toString().trim();
-
-  // Find the boat where the sail number matches the provided sail number string
-  return boats.find(b =>
-    b.sailnumber &&
-    b.sailnumber.toString().trim() === sailStr
-  ) || null;
+  return findByName(boats, sail, 'sailnumber');
 }
 
 /**

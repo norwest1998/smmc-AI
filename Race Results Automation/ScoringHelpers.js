@@ -92,7 +92,8 @@ function getDiscardCount(length) {
 }
 
 function updateClassMemberHandicaps(updatedHandicaps, className) {
-  const ss = SpreadsheetApp.openById(AUTOMATION_SHEET_ID);
+  const cfg = getConfig();
+  const ss = SpreadsheetApp.openById(cfg.masterDataSpreadsheetId);
   const sheet = ss.getSheetByName('ClassMembers');
   if (!sheet) throw new Error('ClassMembers sheet not found');
 
@@ -166,8 +167,32 @@ function snapshotClassMembers_(sheet) {
       .setValues(sheet.getDataRange().getValues());
 }
 
+function calculateNetWithDiscards(scores, discardCount) {
+  const gross = scores.reduce((sum, s) => sum + s, 0);
+
+  const indexed = scores.map((score, index) => ({ score, index }));
+  indexed.sort((a, b) => b.score - a.score); // highest (worst) first
+
+  const discardFlags = new Array(scores.length).fill(false);
+  let discardSum = 0;
+
+  const n = Math.min(discardCount, indexed.length);
+  for (let i = 0; i < n; i++) {
+    discardFlags[indexed[i].index] = true;
+    discardSum += indexed[i].score;
+  }
+
+  return {
+    gross,
+    net: gross - discardSum,
+    discardSum,
+    discardFlags
+  };
+}
+
 function getRegattaConfigByName(regattaName) {
-  const ss = SpreadsheetApp.openById(AUTOMATION_SHEET_ID);
+  const cfg = getConfig();
+  const ss = SpreadsheetApp.openById(cfg.masterDataSpreadsheetId);
   const sheet = ss.getSheetByName('Regattas');
   if (!sheet) throw new Error('Regattas sheet not found');
 

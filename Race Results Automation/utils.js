@@ -32,28 +32,3 @@ function tryNormalizeDate(dateRaw) {
     // Return raw string if normalization fails
     return dateRaw; 
 }
-
-/************************************
-* Round Processing Utilities
-************************************/
-// List all processed rounds (for debugging or admin menu)
-function listProcessedRounds() {
-  console.log(getProcessedRounds());
-}
-
-// Remove a round (e.g., if imported wrong)
-function removeProcessedRound(eventID) {
-  const rounds = getProcessedRounds();
-  if (rounds.hasOwnProperty(eventID)) {
-    delete rounds[eventID];
-    saveProcessedRounds(rounds);
-  }
-}
-
-// Get sheet object from stored sheetID
-function getRoundSheetByEventID(eventID) {
-  const sheetID = getSheetIDForEvent(eventID);
-  if (!sheetID) return null;
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  return ss.getSheets().find(s => s.getSheetId() === sheetID);
-}

@@ -2,72 +2,57 @@ function applySeriesFormatting(sheetID, raceType) {
   const ss = SpreadsheetApp.openById(sheetID);
   const sh = ss.getSheetByName(raceType);
 
-  console.log(sh.getSheetName() + " " + sh.getSheetId() + " "  + sheetID)
-  console.log (sh.getSheetName());
-  console.log (sh.getMaxRows());
-  
-  const lastRow = Math.max(sh.getMaxRows(), 6);
+  const lastRow = Math.max(sh.getMaxRows(), OVERALL_DATA_START_ROW);
   const lastCol = Math.max(sh.getMaxColumns(), 7);
 
-  // Prevent invalid ranges
-  if (lastRow < 6 || lastCol < 1) {
+  if (lastRow < OVERALL_DATA_START_ROW || lastCol < 1) {
     console.log('applySeriesFormatting: not enough data to format');
     return;
   }
 
-  const hdrRow = 5;
+  const hdrRow = OVERALL_HEADER_ROW;
   const lastHdrCol = 7;
-  const bodyRowStart = 6;
+  const bodyRowStart = OVERALL_DATA_START_ROW;
   const roundColStart = lastHdrCol + 1;
 
   const bodyCount = Math.max(0, lastRow - bodyRowStart + 1);
   const roundColCount = Math.max(0, lastCol - lastHdrCol);
 
-  // 1. Header sizing
+  // Spacer row/column sizing (rows 1-2, 5-6)
   sh.setRowHeight(1, 10);
   sh.setColumnWidth(1, 10);
   sh.setColumnWidth(2, 25);
   sh.setColumnWidth(3, 50);
-  sh.setRowHeight(4, 10);
+  sh.setRowHeight(2, 10);
+  sh.setRowHeight(5, 10);
+  sh.setRowHeight(6, 10);
 
-  // 2. Header styling
   if (lastCol >= 7) {
-    sh.getRange("B5:G5")
+    sh.getRange(hdrRow, 2, 1, 6)
       .setBackground("#4A86E8")
       .setFontColor("white")
       .setFontWeight("bold")
       .setHorizontalAlignment("center");
   }
 
-  // 3. Metadata alignment
-  sh.getRange("B2:B3").setHorizontalAlignment("left");
-  sh.getRange("D2:D3").setHorizontalAlignment("left");
+  sh.getRange(OVERALL_META_ROW_1, 2, 2, 1).setHorizontalAlignment("left");
+  sh.getRange(OVERALL_META_ROW_1, 4, 2, 1).setHorizontalAlignment("left");
 
   if (lastCol >= 7) {
-    sh.getRange("G2").setHorizontalAlignment("right");
+    sh.getRange(OVERALL_META_ROW_1, 7).setHorizontalAlignment("right");
   }
 
-  // 4. Body alignment
   if (bodyCount > 0) {
-    // Attended & Sail
-    sh.getRange(bodyRowStart, 2, bodyCount, 2)
-      .setHorizontalAlignment("center");
+    sh.getRange(bodyRowStart, 2, bodyCount, 2).setHorizontalAlignment("center");
 
-    // Rank, Total, Discard
     if (lastCol >= 7) {
-      sh.getRange(bodyRowStart, 5, bodyCount, 3)
-        .setHorizontalAlignment("center");
+      sh.getRange(bodyRowStart, 5, bodyCount, 3).setHorizontalAlignment("center");
     }
 
-    // Names
-    sh.getRange(bodyRowStart, 4, bodyCount, 1)
-      .setHorizontalAlignment("left")
-      .setWrap(false);
+    sh.getRange(bodyRowStart, 4, bodyCount, 1).setHorizontalAlignment("left").setWrap(false);
 
-    // Resize key columns
     sh.autoResizeColumn(4);
-    let width = sh.getColumnWidth(4);
-    sh.setColumnWidth(4, width + 30);
+    sh.setColumnWidth(4, sh.getColumnWidth(4) + 30);
 
     [5, 6, 7].forEach(col => {
       if (col <= lastCol) {
@@ -77,30 +62,21 @@ function applySeriesFormatting(sheetID, raceType) {
     });
   }
 
-  // 5. Round column formatting
   if (roundColCount > 0 && lastRow > 1) {
-    const roundRange = sh.getRange(
-      2,
-      roundColStart,
-      lastRow - 1,
-      roundColCount
-    );
+    const roundRange = sh.getRange(OVERALL_META_ROW_1, roundColStart, lastRow - OVERALL_META_ROW_1 + 1, roundColCount);
     roundRange.setHorizontalAlignment("center");
 
-    // Round headers
     sh.getRange(hdrRow, roundColStart, 1, roundColCount)
       .setBackground("#4A86E8")
       .setFontColor("white")
       .setFontWeight("bold");
 
-    // Resize round columns
     for (let c = roundColStart; c <= lastCol; c++) {
       sh.autoResizeColumn(c);
       sh.setColumnWidth(c, sh.getColumnWidth(c) + 5);
     }
   }
 
-  // 6. Trim extra columns
   const maxCols = sh.getMaxColumns();
   if (maxCols > lastCol) {
     sh.deleteColumns(lastCol + 1, maxCols - lastCol);

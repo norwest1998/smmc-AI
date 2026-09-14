@@ -44,7 +44,7 @@ function checkRoundExists(eventID) {
       return null; // Return null on error to allow processing
     }
   } catch (error) {
-    Logger.log('Error in checkEventProcessed: ' + error);
+    Logger.log('Error in checkRoundExists: ' + error);
     return null; // Return null on error to allow processing
   }
 }
@@ -75,7 +75,7 @@ function getCurrentRoundInfo(eventID) {
       return null;
     }
   } catch (error) {
-    Logger.log('Error in getRoundData: ' + error);
+    Logger.log('Error in getCurrentRoundInfo: ' + error);
     return null;
   }
 }
@@ -112,7 +112,7 @@ function storeRoundInformation(regattaName, eventID, roundNumber, info) {
       return false;
     }
   } catch (error) {
-    Logger.log('Error in recordRound: ' + error);
+    Logger.log('Error in storeRoundInformation: ' + error);
     return false;
   }
 }
@@ -172,8 +172,8 @@ function callRoundTrackerAPI(action, params) {
       payload: JSON.stringify(payload),
       muteHttpExceptions: true
     };
-
-    const response = UrlFetchApp.fetch(ROUND_TRACKER_WEB_APP_URL, options);
+    const cfg = getConfig();
+    const response = UrlFetchApp.fetch(cfg.roundTrackerWebAppURL, options);
     const result = JSON.parse(response.getContentText());
     
     return result;
@@ -196,14 +196,14 @@ function exampleRaceModule() {
   const eventID = "EVENT_12345";
   
   // Step 1: Check if already processed
-  const existingRound = checkEventProcessed(eventID);
+  const existingRound = checkRoundExists(eventID);
   if (existingRound !== null) {
     Logger.log('Event already processed in round ' + existingRound + '. Skipping.');
     return;
   }
   
   // Step 2: Get next round number
-  const roundNumber = getNextRound(regattaName);
+  const roundNumber = getNextRoundNumber(regattaName);
   Logger.log('Processing round ' + roundNumber);
   
   // Step 3: Process race results
@@ -212,7 +212,7 @@ function exampleRaceModule() {
   const competitors = 24; // from your data
   
   // Step 4: Record the round information
-  const recorded = recordRound(regattaName, eventID, roundNumber, {
+  const recorded = storeRoundInformation(regattaName, eventID, roundNumber, {
     sheetID: resultSheetID,
     raceDate: '2025-01-15',
     className: 'Laser',
@@ -225,7 +225,7 @@ function exampleRaceModule() {
   }
   
   // Step 5: Increment round counter for next time
-  const incremented = incrementRound(regattaName);
+  const incremented = incrementRoundNumber(regattaName);
   if (!incremented) {
     Logger.log('Warning: Failed to increment round counter');
   }
@@ -257,7 +257,7 @@ function exampleCreateRoundSheet() {
 function exampleGetRoundData() {
   const eventID = "EVENT_12345";
   
-  const roundData = getRoundData(eventID);
+  const roundData = getCurrentRoundInfo(eventID);
   
   if (roundData !== null) {
     Logger.log('Round Data Found:');
@@ -297,17 +297,17 @@ function testInternalFunctions() {
     
     // Test 2: Check non-existent event
     Logger.log('Test 2: Check non-existent event...');
-    const notFound = checkEventProcessed('NONEXISTENT_123');
+    const notFound = checkRoundExists('NONEXISTENT_123');
     Logger.log('✓ Result: ' + notFound + ' (should be null)');
     
     // Test 3: Get round data for non-existent event
     Logger.log('Test 3: Get round data for non-existent event...');
-    const noData = getRoundData('NONEXISTENT_123');
+    const noData = getCurrentRoundInfo('NONEXISTENT_123');
     Logger.log('✓ Result: ' + noData + ' (should be null)');
     
     // Test 4: Record round
     Logger.log('Test 4: Record round...');
-    const recorded = recordRound(testRegatta, testEventID, round, {
+    const recorded = storeRoundInformation(testRegatta, testEventID, round, {
       sheetID: 'SHEET_TEST_123',
       raceDate: '2025-01-15',
       className: 'Test Class',
@@ -318,12 +318,12 @@ function testInternalFunctions() {
     
     // Test 5: Check existing event
     Logger.log('Test 5: Check existing event...');
-    const found = checkEventProcessed(testEventID);
+    const found = checkRoundExists(testEventID);
     Logger.log('✓ Found round: ' + found + ' (should be ' + round + ')');
     
     // Test 6: Get complete round data
     Logger.log('Test 6: Get complete round data...');
-    const roundData = getRoundData(testEventID);
+    const roundData = getCurrentRoundInfo(testEventID);
     Logger.log('✓ Retrieved data:');
     Logger.log('  - Regatta: ' + roundData.regattaName + ' (should be ' + testRegatta + ')');
     Logger.log('  - Round: ' + roundData.roundNumber + ' (should be ' + round + ')');
@@ -333,7 +333,7 @@ function testInternalFunctions() {
     
     // Test 7: Increment round
     Logger.log('Test 7: Increment round...');
-    const incremented = incrementRound(testRegatta);
+    const incremented = incrementRoundNumber(testRegatta);
     Logger.log('✓ Incremented: ' + incremented + ' (should be true)');
     
     // Test 8: Verify increment worked
@@ -345,7 +345,7 @@ function testInternalFunctions() {
     
   } catch (error) {
     Logger.log('✗ Test failed: ' + error);
-    Logger.log('Please check your ROUND_TRACKER_WEB_APP_URL is set correctly.');
+    Logger.log('Please check your ROUND_TRACKER_WEB_APP URL is set correctly.');
   }
 }
 
