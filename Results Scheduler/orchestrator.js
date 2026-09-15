@@ -22,11 +22,11 @@ function checkAndProcessJson() {
     raceType = 'Handicap';
   }
 
-  // 1. Send data to Script A Web App
-  const success = callScriptAWebApp(parsed, raceType);
-  Logger.log("Success: " + success);
+  // 1. Send data to Race Results Automation Web App
+  const result = callScriptAWebApp(parsed, raceType);
+  Logger.log("Result: " + JSON.stringify(result));
 
-  if (success) {
+  if (result && result.status === "success") {
     // 1. Move file to Archive
     archiveProcessedFile(file, CONFIG.resultsProcessedFolderId);
 
@@ -41,27 +41,22 @@ function checkAndProcessJson() {
     scheduleNextEventTrigger();
 
   } else {
-    Logger.log('Failed to process via Script A. Retrying in 5 minutes...');
+    const errMsg = (result && result.message) || 'Unknown error';
+    file.setDescription(`Failed, error, ${errMsg}`);
+    Logger.log('Failed to process via Script A: ' + errMsg + '. Retrying in 5 minutes...');
     createDelayTrigger(5, 'checkAndProcessJson');
   }
 }
 
 function callScriptAWebApp(parsed, raceType) {
-  // 1. Construct the payload object
-  const payloadObject = {
-    parsed: parsed,
-    raceType: raceType
-  };
-
-  // 2. Stringify it for application/json content type
+  const payloadObject = { parsed: parsed, raceType: raceType };
   const options = {
-  method: "post",
-  contentType: "application/json",
-  headers: {"Authorization": "Bearer " + ScriptApp.getOAuthToken()},
-  payload: JSON.stringify(payloadObject),
-  muteHttpExceptions: true
+    method: "post",
+    contentType: "application/json",
+    headers: {"Authorization": "Bearer " + ScriptApp.getOAuthToken()},
+    payload: JSON.stringify(payloadObject),
+    muteHttpExceptions: true
   };
-
 
   try {
     const response = UrlFetchApp.fetch(WebAppUrl, options);
@@ -69,7 +64,7 @@ function callScriptAWebApp(parsed, raceType) {
     return JSON.parse(response.getContentText());
   } catch (e) {
     Logger.log("Fetch Error: " + e.toString());
-    return null;
+    return { status: "error", message: e.message || e.toString() };
   }
 }
 
