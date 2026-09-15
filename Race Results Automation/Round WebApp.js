@@ -173,9 +173,15 @@ function callRoundTrackerAPI(action, params) {
       muteHttpExceptions: true
     };
     const cfg = getConfig();
-    const response = UrlFetchApp.fetch(cfg.roundTrackerWebAppURL, options);
-    const result = JSON.parse(response.getContentText());
-    
+    let response = UrlFetchApp.fetch(cfg.roundTrackerWebAppURL, options);
+
+    // Follow the redirect manually, preserving POST
+    if (response.getResponseCode() === 302) {
+      const redirectUrl = response.getHeaders()['Location'];
+      response = UrlFetchApp.fetch(redirectUrl, options);
+    }
+    const result = JSON.parse(response.getContentText());    
+
     return result;
     
   } catch (error) {

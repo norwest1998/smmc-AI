@@ -30,6 +30,7 @@ function doPost(e) {
 function doGet(e) {
   const action = e.parameter.action;
   const regattaName = e.parameter.regattaName;
+  const eventID = e.parameter.eventID;
   
   try {
     if (action === 'getNextRound' && regattaName) {
