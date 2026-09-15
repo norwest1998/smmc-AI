@@ -104,7 +104,7 @@ function applyTieBreakRanking(sh, roundCount, lastRow) {
   });
 
   sh.getRange(OVERALL_DATA_START_ROW, 5, finalRanks.length, 1).setValues(finalRanks);
-  sh.getRange(OVERALL_DATA_START_ROW, 2, dataRowCount, lastCol).sort({ column: 5, ascending: true });
+  sh.getRange(OVERALL_DATA_START_ROW, 2, dataRowCount, lastCol - 1).sort({ column: 5, ascending: true });
 
   console.log(`Tie-break ranking applied and sheet sorted for ${finalRanks.length} member(s)`);
 }
