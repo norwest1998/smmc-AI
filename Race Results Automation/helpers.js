@@ -111,7 +111,8 @@ function getBoatId(sail, memberName, className) {
   const memberData = sheet.getDataRange().getValues();
 
   for (let i = 1; i < memberData.length; i++) {
-    if (memberData[i][2] === memberName && memberData[i][4] === sail && memberData[i][3] === className) {
+    const classMatches = (className === 'General') || (memberData[i][3] === className);
+    if (memberData[i][2] === memberName && memberData[i][4] === sail && classMatches) {
       return memberData[i][0];
     }
   }

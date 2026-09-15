@@ -130,7 +130,8 @@ function updateClassMemberHandicaps(updatedHandicaps, className) {
     let finalValue = data[i][targetCol]; 
 
     // Check if the boat meets the update criteria
-    if (data[i][activeCol] === true && data[i][classCol] === className) {
+    const classMatches = (className === 'General') || (data[i][classCol] === className);
+    if (data[i][activeCol] === true && classMatches) {
       const boatId = String(data[i][boatIdCol]);
       if (boatId in hcapMap) {
         finalValue = hcapMap[boatId];
@@ -138,7 +139,6 @@ function updateClassMemberHandicaps(updatedHandicaps, className) {
       }
     }
     
-    // Push into our single-column update array
     handicapColumnValues.push([finalValue]);
   }
 
