@@ -745,11 +745,26 @@ function getFinancialStats_() {
   var paidCol = findHeader_(values[0], ['paidup', 'paid up', 'paid']);
   if (paidCol === -1) paidCol = 6; // Paid Up is column G
 
+  var activeCol = findHeader_(values[0], ['active']);
+  var typeCol   = findHeader_(values[0], ['membership', 'membershiptype', 'membertype']);
+
+  function isActive_(v) {
+    return v === true || String(v).trim().toUpperCase() === 'TRUE' || String(v).trim() === 'Yes';
+  }
+
   var paid = 0, unpaid = 0;
   for (var r = 1; r < values.length; r++) {
     var v = values[r][paidCol];
     var memberIdentified = String(values[r][0]).trim() !== '' || String(values[r][2]).trim() !== '';
     if (!memberIdentified) continue;
+
+    // Only count active Full/Affiliate members — exclude Expired/Inactive rows.
+    if (activeCol !== -1 && !isActive_(values[r][activeCol])) continue;
+    if (typeCol !== -1) {
+      var type = String(values[r][typeCol]).trim().toLowerCase();
+      if (type !== 'full' && type !== 'affiliate') continue;
+    }
+
     if (v === true || String(v).trim().toUpperCase() === 'TRUE' || String(v).trim() === 'Yes') paid++;
     else unpaid++;
   }
