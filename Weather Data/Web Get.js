@@ -18,6 +18,7 @@ function doGet(e) {
     return {
       day: Utilities.formatDate(new Date(row[0]), Session.getScriptTimeZone(), "EEEE"),
       icon: getEmoji(code),
+      desc: getDescription(code),
       bg: getBackgroundImage(code),
       min,
       max,
