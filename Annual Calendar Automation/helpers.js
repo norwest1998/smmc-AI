@@ -254,11 +254,11 @@ function renderPage(title, bodyContent) {
     .race-card.no-events {
       min-height: 220px;
       display: flex;
-      flex-direction: column; /* Ensure vertical stacking */
+      flex-direction: column; 
       justify-content: center;
       align-items: center;
       padding: 15px;
-      overflow: visible; /* Ensure nothing is hidden from measurement */
+      overflow: visible; 
       background: linear-gradient(
         to bottom,
         rgba(160, 160, 160, 0.15),
@@ -273,13 +273,6 @@ function renderPage(title, bodyContent) {
       height: 100%;
       object-fit: cover;
       z-index: 0;
-    }
-
-    .race-card .weather-panel--hourly{
-      display:grid;
-      grid-template-columns:repeat(3, 1fr);
-      gap:10px;
-      width:100%;
     }
 
     .race-card::before {
@@ -310,10 +303,23 @@ function renderPage(title, bodyContent) {
     /* 7. WEATHER ROW */
     .weather-cards-row {
       display: flex;
+      flex-direction: column
       flex-wrap: wrap;
       justify-content: center;
       gap: 10px;
       width: 100%;
+    }
+
+    .race-card .weather-panel--hourly{
+      display:grid;
+      grid-template-columns:repeat(3, 1fr);
+      gap:10px;
+      width:100%;
+    }
+    .race-card .weather-mini-card{
+      width:auto;              /* must NOT still say width:100% */
+      flex-direction:column;
+      margin-top:0;             /* must NOT still say margin-top:16px */
     }
 
     .weather-mini-card {
@@ -323,11 +329,12 @@ function renderPage(title, bodyContent) {
       border-radius: 5px;
       padding: 8px;
       flex: 0 0 80px;
+      width: auto;
       max-width: 110px;
       font-size: 14px;
-      width:auto;              
-      flex-direction:column;
-      margin-top:0;   
+      display: flex;
+      flex-direction: column;
+      margin-top:0; 
     }
 
     .time {
@@ -349,107 +356,81 @@ function renderPage(title, bodyContent) {
     }
     .uvVal {font-size: 1em; font-weight: 600;}
 
-    .weather-panel--daily{
-      display:flex;
-      flex-direction:column;
-      gap:8px;
-      padding:8px 12px;
-      margin-top:8px;
-      border-radius:8px;
-      background:linear-gradient(155deg, var(--glass-fill-hi), var(--glass-fill));
-      border:1px solid var(--glass-border);
-      backdrop-filter:blur(var(--glass-blur)) saturate(140%);
-      -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(140%);
+
+    /* WEATHER No Hourly */
+    .weather-panel--daily {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px 14px;
+      margin-top: 8px;
+      border-radius: 8px;
+      background: linear-gradient(155deg, var(--glass-fill-hi), var(--glass-fill));
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
       box-shadow:
         0 1px 0 rgba(255,255,255,0.2) inset,
         0 12px 28px rgba(2,10,18,0.3);
-      position:relative;
+      position: relative;
     }
-    .weather-panel--daily::after{
-      content:"";
-      position:absolute; inset:0;
-      border-radius:inherit;
-      background:linear-gradient(120deg, rgba(255,255,255,0.12) 0%, transparent 30%);
-      pointer-events:none;
+    .weather-panel--daily::after {
+      content: "";
+      position: absolute; 
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(120deg, rgba(255,255,255,0.12) 0%, transparent 30%);
+      pointer-events: none;
     }
-    .daily-row--summary{
-      display:flex;
-      align-items:center;
-      gap:8px;
-      justify-content:center;
+    .daily-row {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-family: var(--font-data);
+      font-size: 13px;
+      color: var(--foam-dim);
+      letter-spacing: 0.02em;
     }
-    .daily-icon{ font-size:34px; line-height:1; flex:none; filter:drop-shadow(0 2px 6px rgba(0,0,0,0.25)); }
-    .daily-desc{ font-family:var(--font-body); font-size:13.5px; font-weight:600; color:var(--foam); }
-    .daily-temps{ font-family:var(--font-data); font-size:20px; display:flex; align-items:baseline; gap:4px; margin-left:auto; }
-    .daily-temps .temp-max{ font-weight:500; }
-    .daily-temps .temp-min{ font-size:13px; color:var(--foam-dim); }
-    
-    .weather-daily-card{
-      display:flex;
-      align-items:center;
-      gap:8px;
-      padding:8px 12px;
-      margin-top:8px;
-      border-radius:8px;
-      background:linear-gradient(155deg, var(--glass-fill-hi), var(--glass-fill));
-      border:1px solid var(--glass-border);
-      backdrop-filter:blur(var(--glass-blur)) saturate(140%);
-      -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(140%);
-      box-shadow:
-        0 1px 0 rgba(255,255,255,0.2) inset,
-        0 12px 28px rgba(2,10,18,0.3);
-      position:relative;
-      flex-wrap:wrap;
+    .daily-summary-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+      white-space: nowrap;
     }
-    .weather-daily-card::after{
-      content:"";
-      position:absolute; inset:0;
-      border-radius:inherit;
-      background:linear-gradient(120deg, rgba(255,255,255,0.12) 0%, transparent 30%);
-      pointer-events:none;
+    .daily-icon {
+      font-size: 22px;
+      line-height: 1;
+      flex: none;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));
     }
-    .daily-icon{
-      font-size:34px;
-      line-height:1;
-      flex:none;
-      filter:drop-shadow(0 2px 6px rgba(0,0,0,0.25));
+    .daily-desc {
+      font-family: var(--font-body);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--foam);
+      flex: 1;
+      text-align: center;
+      padding: 0 6px;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
     }
-    .daily-desc{
-      font-family:var(--font-body);
-      font-size:13.5px;
-      font-weight:600;
-      color:var(--foam);
-      flex:1 1 120px;
-      min-width:100px;
+    .daily-temps {
+      font-family: var(--font-data);
+      font-size: 18px;
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      flex: none;
     }
-    .daily-temps{
-      font-family:var(--font-data);
-      font-size:20px;
-      flex:none;
-      display:flex;
-      align-items:baseline;
-      gap:4px;
-    }
-    .daily-temps .temp-max{ font-weight:500; }
-    .daily-temps .temp-min{
-      font-size:13px;
-      color:var(--foam-dim);
-    }
-    .daily-row{
-      width:100%;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:8px;
-      font-family:var(--font-data);
-      font-size:13px;
-      color:var(--foam-dim);
-      letter-spacing:0.02em;
-      padding-top:4px;
-    }
-    .daily-row .wind{ color:var(--foam-dim); }
-    .daily-row .rain{ color:var(--foam-dim); }
-    .daily-row .uvVal{ font-weight:500; }
+    .daily-temps .temp-max { font-weight: 600; }
+    .daily-temps .temp-min { font-size: 13px; color: var(--foam-dim); }
+    .daily-row .wind { color: var(--foam); font-size: 13px; }
+    .daily-row .rain { color: var(--foam); font-size: 13px; }
+    .daily-row .uvVal { font-size: 13px; font-weight: 600; }
 
   </style>
 </head>
@@ -688,7 +669,7 @@ function buildDailySummaryHtml(dailyData, raceDate) {
     const windMax        = row[4];
     const windMean       = row[5];
     const windDir        = row[6];
-    const windScl        = getWindScale(row[5])
+    const windScl        = getWindScale(row[5]);
     const tempMin        = Math.round(row[7]);
     const tempMax        = Math.round(row[8]);
 
@@ -700,7 +681,7 @@ function buildDailySummaryHtml(dailyData, raceDate) {
 
     return `
       <div class="weather-panel weather-panel--daily">
-        <div class="daily-row--summary">
+        <div class="daily-row daily-row--summary">
           <span class="daily-icon">${desc.icon}</span>
           <span class="daily-desc">${desc.label}</span>
           <span class="daily-temps">
@@ -712,14 +693,14 @@ function buildDailySummaryHtml(dailyData, raceDate) {
           <span class="wind">Wind ${windMean}–${windMax} kt ${windArrow} ${windScl}</span>
         </div>
         <div class="daily-row">
-          <span class="rain"> Rain ${rainSum} mm</span>
+          <span class="rain">Rain ${rainSum} mm</span>
           <span class="uvVal" style="color:${uvColor};">${uvMax !== null ? 'UV ' + uvMax : ''}</span>
         </div>
       </div>
     `;
   }
 
-  return null; // no matching date found in the forecast sheet
+  return null;
 }
 
 function json(obj) {
