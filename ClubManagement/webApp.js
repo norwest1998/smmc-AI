@@ -36,6 +36,15 @@ function doPost(e) {
   const body = JSON.parse(e.postData.contents);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
+  if (body.action === "query") {
+    try {
+      const result = queryMemberContactAgent(body.query);
+      return json({ success: true, message: result });
+    } catch (err) {
+      return json({ error: err.message });
+    }
+  }
+
   // --- Member Management actions (no body.sheet required) ---
   if (body.action === "markPaid") {
     try {
