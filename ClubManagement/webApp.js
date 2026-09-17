@@ -44,7 +44,11 @@ function doPost(e) {
       return json({ error: err.message });
     }
   }
-
+  
+  if (data.action === 'updateMember') {
+    return handleUpdateMember(data);
+  }
+  
   // --- Member Management actions (no body.sheet required) ---
   if (body.action === "markPaid") {
     try {

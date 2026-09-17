@@ -179,6 +179,34 @@ function sheetToObjects(ss, sheetName, keys) {
   }
 }
 
+function handleUpdateMember(data) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Members');
+  var row = data.row;
+  var updated = data.updatedData;
+
+  // Update sheet columns based on your sheet schema (1-indexed)
+  // Example mapping based on your parseMembersSheet columns:
+  sheet.getRange(row, 2).setValue(updated.status);
+  sheet.getRange(row, 4).setValue(updated.membershipType);
+  sheet.getRange(row, 5).setValue(updated.startDate);
+  sheet.getRange(row, 6).setValue(updated.endDate);
+  sheet.getRange(row, 7).setValue(updated.isPaid);
+  sheet.getRange(row, 8).setValue(updated.phone);
+  sheet.getRange(row, 9).setValue(updated.email); // Email (col 9)
+  sheet.getRange(row, 10).setValue(updated.whatsapp);
+  sheet.getRange(row, 12).setValue(updated.addressLine);
+  sheet.getRange(row, 13).setValue(updated.suburb);
+  sheet.getRange(row, 14).setValue(updated.postcode);
+  sheet.getRange(row, 15).setValue(updated.emergencyContactName);
+  sheet.getRange(row, 16).setValue(updated.emergencyContactNumber);
+  sheet.getRange(row, 17).setValue(updated.calendarSubscription);
+  sheet.getRange(row, 18).setValue(updated.homeClub);
+  sheet.getRange(row, 19).setValue(updated.committee);
+
+  return ContentService.createTextOutput(JSON.stringify({ success: true }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 function testAgentQuery() {
   const userQuery = "list of IOM sailors";
   
