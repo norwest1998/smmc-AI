@@ -57,3 +57,32 @@ function getMembers(option) {
   return members;
 }
 
+function getClassMembers() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetById(ClsMembSheetId); // Ensure MembersSheetId is defined
+  
+  if (!sheet) {
+    throw new Error('Sheet named "ClassMembers" not found.');
+  }
+
+  const data = sheet.getDataRange().getValues();
+  const members = [];
+
+  // Start from index 1 to skip header row (index 0)
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    members.push({
+        id: row[0],
+        active: row[1], 
+        member: row[2],
+        class: row[3],
+        sailNo: row[4],
+        hcap: row[6],
+        gh: row[8],
+        ghcap: row[9]
+    });
+
+  }
+
+  return members;
+}

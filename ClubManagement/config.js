@@ -2,6 +2,7 @@
 const SPREADSHEET_ID = SpreadsheetApp.getActiveSpreadsheet().getId();
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwvTsLbXwjZzJJj4BqKdG_QIea-iDnLVfPf0zx7doRZ2RwcIwmEzdm_C_Xxt7g6lo-J/exec";
 const MembersSheetId = 0;
+const ClsMembSheetId = 812736825;
 const MembersHeaders = ['No','Active','MemberName','Membership','Start Date','End Date','Paid up','Phone','email','WhatsApp','Duplicate','Address Line','Suburb','PCode',	'Emergency Contact Name','Emergency Contact Number','Calendar Subscription'];
 const TrackingSheetId = 614102941;
 const TrackingHeaders = ['Code','Timestamp','Member Name','Member email','Email status','Response Date','Reminder Date'];

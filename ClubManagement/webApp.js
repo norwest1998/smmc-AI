@@ -15,6 +15,11 @@ function doGet(e) {
     return json({ members: getMembersForPaidList() });
   }
 
+  // --- Class Members for Results Capture ---
+  if (action === "ClassMembers") {
+    return json({ members: getClassMembersList() });
+  }
+
   if (action === "activeMembers") {
     return json({ members: getMembers("active") });
   }
@@ -35,7 +40,7 @@ function doGet(e) {
 function doPost(e) {
   const body = JSON.parse(e.postData.contents);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-
+  
   if (body.action === "query") {
     try {
       const result = queryMemberContactAgent(body.query);
@@ -44,11 +49,11 @@ function doPost(e) {
       return json({ error: err.message });
     }
   }
-  
+
   if (data.action === 'updateMember') {
     return handleUpdateMember(data);
   }
-  
+
   // --- Member Management actions (no body.sheet required) ---
   if (body.action === "markPaid") {
     try {
