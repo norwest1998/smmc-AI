@@ -57,7 +57,7 @@ function getMembers(option) {
   return members;
 }
 
-function getClassMembers() {
+function getClassMembersList(className) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetById(ClsMembSheetId); // Ensure MembersSheetId is defined
   
@@ -71,17 +71,35 @@ function getClassMembers() {
   // Start from index 1 to skip header row (index 0)
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-    members.push({
-        id: row[0],
-        active: row[1], 
-        member: row[2],
-        class: row[3],
-        sailNo: row[4],
-        hcap: row[6],
-        gh: row[8],
-        ghcap: row[9]
-    });
-
+    if (row[1]) {
+      if (className === "General") {
+        if (row[8]) {
+          members.push({
+              id: row[0],
+              active: row[1], 
+              member: row[2],
+              className: row[3],
+              sailNo: row[4],
+              hcap: row[6],
+              gh: row[8],
+              ghcap: row[9]
+          });          
+        } 
+      } else {
+        if (row[3] === className) {
+          members.push({
+              id: row[0],
+              active: row[1], 
+              member: row[2],
+              className: row[3],
+              sailNo: row[4],
+              hcap: row[6],
+              gh: row[8],
+              ghcap: row[9]
+          });
+        }
+      }
+    }
   }
 
   return members;

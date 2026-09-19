@@ -2,6 +2,7 @@ function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const action = e.parameter.action;
   const sheetName = e.parameter.sheet;
+  const className = e.parameter.className;
 
   if (action === "fetch") {
     const fetchSheet = ss.getSheetByName(sheetName);
@@ -17,7 +18,7 @@ function doGet(e) {
 
   // --- Class Members for Results Capture ---
   if (action === "ClassMembers") {
-    return json({ members: getClassMembersList() });
+    return json({ members: getClassMembersList(className) });
   }
 
   if (action === "activeMembers") {
