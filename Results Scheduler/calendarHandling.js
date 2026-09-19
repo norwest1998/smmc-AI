@@ -116,7 +116,7 @@ function markCalendarEventProcessed(eventId) {
 
       if (rowEventId === targetId) {
         // Update Column E (Column Index 5) -> Status
-        sheet.getRange(i + 1, 14).setValue('PROCESSED');
+        sheet.getRange(i + 1, 15).setValue('PROCESSED');
         Logger.log(`Successfully marked Event ID "${eventId}" as PROCESSED at Row ${i + 1}.`);
         return true;
       }

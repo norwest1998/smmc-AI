@@ -23,7 +23,7 @@ function checkAndProcessJson() {
   }
 
   // 1. Send data to Race Results Automation Web App
-  const result = callScriptAWebApp(parsed, raceType);
+  const result = callResultsWebApp(parsed, raceType);
   Logger.log("Result: " + JSON.stringify(result));
 
   if (result && result.status === "success") {
@@ -48,7 +48,7 @@ function checkAndProcessJson() {
   }
 }
 
-function callScriptAWebApp(parsed, raceType) {
+function callResultsWebApp(parsed, raceType) {
   const payloadObject = { parsed: parsed, raceType: raceType };
   const options = {
     method: "post",
