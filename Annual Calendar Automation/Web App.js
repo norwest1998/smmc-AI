@@ -19,25 +19,7 @@ function handleGet_(e) {
   const sheetName = e.parameter.sheet;
 
   if (action === "RegattaEvents") {
-    const fetchSheet = ss.getSheetByName("Event Data");
-    const values = fetchSheet.getDataRange().getValues();
-    
-    // Assuming Row 1 has your headers: ["id", "date", "start", "end", "class", "regattaType", "round", "season", "status"]
-    const headers = values[0]; 
-    const formattedData = [];
-
-    // Map rows into objects matching your embedded structure
-    for (let i = 1; i < values.length; i++) {
-      let rowObject = {};
-      headers.forEach((header, index) => {
-        rowObject[header] = values[i][index];
-      });
-      formattedData.push(rowObject);
-    }
-
-    // You MUST return using ContentService for fetch() to read it
-    return ContentService.createTextOutput(JSON.stringify({ values: formattedData }))
-                         .setMimeType(ContentService.MimeType.JSON);
+    return json({ events: getRegattaEventsList() });
   }
 
   if (action === "fetch") {

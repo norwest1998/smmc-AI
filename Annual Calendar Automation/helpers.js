@@ -720,3 +720,31 @@ function injectStyle(html, css) {
   }
   return styleTag + html;
 }
+
+function getRegattaEventsList() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Event Data"); 
+
+  const data = sheet.getDataRange().getValues();
+  const events = [];
+  var now = new Date();
+
+  // Start from index 1 to skip header row (index 0)
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    now.setDate(now.getDate() - 3); 
+
+    if (row[2] >= now && row[0]) {
+      events.push({
+          id: row[0],
+          date: Utilities.formatDate(row[2], ss.getSpreadsheetTimeZone(), 'dd/MM/yyyy'),
+          start: formatTime_(row[3]),
+          end: formatTime_(row[4]),
+          class: row[6],
+          regattaType: row[7],
+          round: row[11],
+          season: row[10],
+          status: row[14]
+      });
+    }
+ }
