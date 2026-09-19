@@ -748,3 +748,4 @@ function getRegattaEventsList() {
       });
     }
  }
+}
