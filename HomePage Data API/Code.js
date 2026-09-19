@@ -151,7 +151,8 @@ function getBoatsList() {
       handicap: r[idx('Handicap')],
       hrn:      r[idx('HRN')],
       gh:       !!r[idx('GH')],
-      ghHcap:   r[idx('GH')] ? r[idx('GH HCap')] : null
+      ghHcap:   r[idx('GH')] ? r[idx('GH HCap')] : null,
+      colour:   r[idx('Hull Colour')]
     }));
   return { boats };
 }
