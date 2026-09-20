@@ -37,6 +37,8 @@ function checkRegionalConflicts() {
   }
   
   const allEvents = futureEvents.concat(pastEvents);
+  let datesWithConflicts = 0;
+  let totalConflictsFound = 0;
   
   // Group calendar events by date to handle multiple events on same day
   const dateGroups = {};
@@ -80,6 +82,8 @@ function checkRegionalConflicts() {
     
     // Only update the FIRST row for this date, leave others blank
     if (uniqueConflicts.length > 0) {
+      datesWithConflicts++;
+      totalConflictsFound += uniqueConflicts.length;
       const firstCell = sheet.getRange(group[0].rowIndex + 1, conflictsCol + 1);
       const richText = createHyperlinkRichText(uniqueConflicts);
       firstCell.setRichTextValue(richText);
@@ -100,6 +104,12 @@ function checkRegionalConflicts() {
   
   // Now update the Upcoming Events sheet
   updateUpcomingEvents(sheet, dateCol, conflictsCol);
+
+  return {
+    success: true,
+    datesWithConflicts,
+    totalConflictsFound
+  };
 }
 
 function updateUpcomingEvents(eventDataSheet, dateCol, conflictsCol) {

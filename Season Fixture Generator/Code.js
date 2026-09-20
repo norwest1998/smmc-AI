@@ -111,6 +111,7 @@ function generateSeasonFixtures() {
   if (!sheet) throw new Error('Sheet "' + SF_EVENT_DATA_SHEET + '" was not found.');
 
   writeSeasonBlock_(sheet, season.name, events);
+  return events.length;
 }
 
 // ============================ SPREADSHEET RESOLUTION ===========================
@@ -335,7 +336,13 @@ function buildSeasonSchedule_(season, regattas) {
     return slotOrder[a.slot.name] - slotOrder[b.slot.name];
   });
 
-  return events;
+  return {
+    success: true,
+    season: season.name,
+    eventsCreated: events.length,
+    competitionEvents: compEvents.length,
+    socialEvents: events.length - compEvents.length
+  };
 }
 
 // ---- [pure-helpers-end] =======================================================

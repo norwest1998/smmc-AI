@@ -1,0 +1,14 @@
+function doPost(e){
+
+
+  const payload = JSON.parse(e.postData.contents);
+
+  if (payload.action === "generateSeasonFixtures") {
+
+    const result = generateSeasonFixtures();
+
+    return ContentService
+      .createTextOutput(JSON.stringify({result}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}

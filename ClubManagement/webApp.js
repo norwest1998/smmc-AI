@@ -51,8 +51,8 @@ function doPost(e) {
     }
   }
 
-  if (data.action === 'updateMember') {
-    return handleUpdateMember(data);
+  if (body.action === 'updateMember') {
+    return handleUpdateMember(body);
   }
 
   // --- Member Management actions (no body.sheet required) ---

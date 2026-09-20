@@ -282,6 +282,15 @@ function doPost(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(body.sheet);
 
+  if (body.action === "runRegionalConflicts") {
+    const result = checkRegionalConflicts();
+    
+    return ContentService.createTextOutput(
+      JSON.stringify({result})
+      )
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
   if (body.action === "update") {
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     const hexCol = headers.indexOf("HexKey") + 1;
