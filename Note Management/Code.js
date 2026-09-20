@@ -12,52 +12,6 @@ function doGet(e) {
   return json(sheetToObjects(sheet));
 }
 
-function doPost(e) {
-  let payload;
-  try {
-    payload = JSON.parse(e.postData.contents || '{}');
-  } catch (err) {
-    return json({ error: 'Invalid JSON payload: ' + err.message }, 400);
-  }
-
-  const action = payload.action;
-  const sheetName = payload.sheet;
-
-  if (!action) {
-    return json({ error: 'Missing action' }, 400);
-  }
-
-  if (!sheetName) {
-    return json({ error: 'Missing sheet name' }, 400);
-  }
-
-  const sheet = getSheetByName(sheetName);
-  if (!sheet) {
-    return json({ error: 'Sheet not found: ' + sheetName }, 404);
-  }
-
-  try {
-    switch (action) {
-      case 'fetch':
-        return json(sheetToObjects(sheet));
-
-      case 'append':
-        return appendRow(sheet, payload.rowData || {});
-
-      case 'update':
-        return updateRow(sheet, payload.hexKey, payload.updates || {});
-
-      case 'delete':
-        return deleteRow(sheet, payload.hexKey);
-
-      default:
-        return json({ error: 'Unknown action: ' + action }, 400);
-    }
-  } catch (err) {
-    return json({ error: err && err.message ? err.message : String(err) }, 500);
-  }
-}
-
 function getSheetByName(sheetName) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   return ss ? ss.getSheetByName(sheetName) : null;

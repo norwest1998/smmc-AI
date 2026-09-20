@@ -1,0 +1,408 @@
+/**
+ * =========================================================
+ * SMMC Notes Web App — Google Apps Script
+ * =========================================================
+ * Spreadsheet ID: 1s9zOeaGiWEshpgWYJO_5VaF1OggvnM_b2mRVsotxcbs
+ *
+ * Sheet tabs expected:
+ *   Notes      — NoteID | Date | Topic | SubTopic | Note | Attachments | CopyIn | CreatedAt | LastUpdated
+ *   Actions    — ActionID | NoteID | Action | By Date | By Member | Status | CreatedAt
+ *   Topics     — TopicID | Topic | CreatedAt
+ *   AuditLog   — Timestamp | User | Action | Sheet | RecordID | Detail
+ *
+ * Supported ?action= params:
+ *   GET  fetch   — return all rows from a sheet
+ *   POST append  — add a new row
+ *   POST update  — update row matched by primary key
+ *   POST delete  — delete row matched by primary key
+ *
+ * Deploy as:
+ *   Execute as: Me
+ *   Who has access: Anyone  (or Anyone within organisation)
+ * =========================================================
+ */
+
+const SS_ID = "1s9zOeaGiWEshpgWYJO_5VaF1OggvnM_b2mRVsotxcbs";
+
+// Primary-key column for each sheet (must match header exactly)
+const PRIMARY_KEYS = {
+  "Notes":    "NoteID",
+  "Actions":  "ActionID",
+  "Topics":   "TopicID",
+  "AuditLog": "Timestamp"   // AuditLog is append-only; key unused for updates
+};
+
+// Auto-ref prefix for human-readable note numbering
+const NOTE_REF_PREFIX = "NOTE";
+
+/* =========================================================
+   ROUTING
+   ========================================================= */
+function doGet(e) {
+  try {
+    const action = (e.parameter.action || "fetch").toLowerCase();
+    const sheet  = e.parameter.sheet  || "";
+
+    if (!sheet) return jsonError("Missing ?sheet= parameter");
+
+    if (action === "fetch") {
+      return jsonOut(handleFetch(sheet));
+    }
+
+    return jsonError("GET only supports action=fetch");
+  } catch (err) {
+    return jsonError(err.message);
+  }
+}
+
+function doPost(e) {
+  try {
+    let payload;
+    try {
+        payload = JSON.parse(e.postData.contents || '{}');
+    } catch (err) {
+        return json({ error: 'Invalid JSON payload: ' + err.message }, 400);
+    }
+
+    const action = payload.action;
+    const sheetName = payload.sheet;
+
+    if (!action) {
+        return json({ error: 'Missing action' }, 400);
+    }
+
+    if (!sheetName) {
+        return json({ error: 'Missing sheet name' }, 400);
+    }
+
+    const sheet = getSheetByName(sheetName);
+    if (!sheet) {
+        return json({ error: 'Sheet not found: ' + sheetName }, 404);
+    }
+
+    // sendActionEmails doesn't need a sheet param
+    if (action === "sendactionemails") {
+      return jsonOut(handleSendActionEmails(payload));
+    }
+
+    switch (action) {
+      case "append": return jsonOut(handleAppend(sheet, payload.rowData));
+      case "update": return jsonOut(handleUpdate(sheet, payload.hexKey, payload.updates));
+      case "delete": return jsonOut(handleDelete(sheet, payload.hexKey));
+      default:       return jsonError("Unknown action: " + action);
+    }
+  } catch (err) {
+    return jsonError(err.message);
+  }
+}
+
+/* =========================================================
+   FETCH — return all rows as array of {header: value} objects
+   ========================================================= */
+function handleFetch(sheetName) {
+  const sh    = getSheet(sheetName);
+  const last  = sh.getLastRow();
+  const lastC = sh.getLastColumn();
+  if (last < 1 || lastC < 1) return [];
+
+  // Return raw 2D array — admin.html's fetchSheet() handles header detection
+  const values = sh.getRange(1, 1, last, lastC).getValues();
+  return { values };
+}
+
+function json(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/* =========================================================
+   APPEND — add a new row; auto-generate NoteRef if Notes tab
+   ========================================================= */
+function handleAppend(sheetName, rowData) {
+  if (!rowData) throw new Error("rowData is required for append");
+
+  const sh      = getSheet(sheetName);
+  const headers = getHeaders(sh);
+
+  // Auto-generate NoteRef for Notes sheet
+  if (sheetName === "Notes" && !rowData["NoteRef"]) {
+    rowData["NoteRef"] = generateNoteRef(sh, headers);
+  }
+
+  const row = headers.map(h => {
+    if (rowData[h] !== undefined) return rowData[h];
+    return "";
+  });
+
+  sh.appendRow(row);
+  auditLog("APPEND", sheetName, rowData[PRIMARY_KEYS[sheetName]] || "", JSON.stringify(rowData));
+  return { success: true, appended: rowData };
+}
+
+/* =========================================================
+   UPDATE — find row by primary key, overwrite specified columns
+   ========================================================= */
+function handleUpdate(sheetName, keyValue, updates) {
+  if (!keyValue || !updates) throw new Error("hexKey and updates are required for update");
+
+  const sh      = getSheet(sheetName);
+  const headers = getHeaders(sh);
+  const pkCol   = getPkColIndex(sheetName, headers);
+
+  const data    = sh.getDataRange().getValues();
+  const rowIdx  = data.findIndex((row, i) => i > 0 && String(row[pkCol]).trim() === String(keyValue).trim());
+
+  if (rowIdx === -1) throw new Error(`Row with key "${keyValue}" not found in ${sheetName}`);
+
+  const sheetRow = rowIdx + 1; // 1-based
+
+  headers.forEach((h, colIdx) => {
+    if (h && updates[h] !== undefined) {
+      sh.getRange(sheetRow, colIdx + 1).setValue(updates[h]);
+    }
+  });
+
+  // Always stamp LastUpdated if column exists
+  const luIdx = headers.indexOf("LastUpdated");
+  if (luIdx !== -1) sh.getRange(sheetRow, luIdx + 1).setValue(new Date().toISOString());
+
+  auditLog("UPDATE", sheetName, keyValue, JSON.stringify(updates));
+  return { success: true, updated: keyValue };
+}
+
+/* =========================================================
+   DELETE — delete row by primary key (marks Status=Deleted,
+   or hard-deletes if sheetName === "Actions" or "Topics")
+   ========================================================= */
+function handleDelete(sheetName, keyValue) {
+  if (!keyValue) throw new Error("hexKey is required for delete");
+
+  const sh      = getSheet(sheetName);
+  const headers = getHeaders(sh);
+  const pkCol   = getPkColIndex(sheetName, headers);
+
+  const data    = sh.getDataRange().getValues();
+  const rowIdx  = data.findIndex((row, i) => i > 0 && String(row[pkCol]).trim() === String(keyValue).trim());
+
+  if (rowIdx === -1) throw new Error(`Row with key "${keyValue}" not found in ${sheetName}`);
+
+  const sheetRow = rowIdx + 1;
+
+  if (sheetName === "Notes") {
+    // Soft delete — stamp Archived status so history is retained
+    const statusIdx = headers.indexOf("Status");
+    if (statusIdx !== -1) sh.getRange(sheetRow, statusIdx + 1).setValue("Archived");
+    const luIdx = headers.indexOf("LastUpdated");
+    if (luIdx !== -1) sh.getRange(sheetRow, luIdx + 1).setValue(new Date().toISOString());
+  } else {
+    // Hard delete for Actions and Topics
+    sh.deleteRow(sheetRow);
+  }
+
+  auditLog("DELETE", sheetName, keyValue, "");
+  return { success: true, deleted: keyValue };
+}
+
+/* =========================================================
+   AUDIT LOG — append a record to AuditLog tab
+   ========================================================= */
+function auditLog(action, sheetName, recordId, detail) {
+  try {
+    const sh      = getSheet("AuditLog");
+    const headers = getHeaders(sh);
+    const user    = Session.getActiveUser().getEmail() || "unknown";
+    const entry   = {
+      Timestamp: new Date().toISOString(),
+      User:      user,
+      Action:    action,
+      Sheet:     sheetName,
+      RecordID:  recordId,
+      Detail:    detail
+    };
+    const row = headers.map(h => entry[h] !== undefined ? entry[h] : "");
+    sh.appendRow(row);
+  } catch (e) {
+    // Non-fatal — don't block the main operation
+    console.error("AuditLog write failed:", e.message);
+  }
+}
+
+/* =========================================================
+   NOTE REF — generate sequential human-readable ref
+   e.g. NOTE-2026-001, NOTE-2026-002
+   ========================================================= */
+function generateNoteRef(sh, headers) {
+  const refIdx  = headers.indexOf("NoteRef");
+  if (refIdx === -1) return "";
+
+  const year    = new Date().getFullYear();
+  const prefix  = `${NOTE_REF_PREFIX}-${year}-`;
+  const data    = sh.getDataRange().getValues();
+
+  let max = 0;
+  data.slice(1).forEach(row => {
+    const ref = String(row[refIdx] || "");
+    if (ref.startsWith(prefix)) {
+      const n = parseInt(ref.replace(prefix, ""), 10);
+      if (!isNaN(n) && n > max) max = n;
+    }
+  });
+
+  return prefix + String(max + 1).padStart(3, "0");
+}
+
+/* =========================================================
+   HELPERS
+   ========================================================= */
+function getSheet(name) {
+  const ss = SpreadsheetApp.openById(SS_ID);
+  const sh = ss.getSheetByName(name);
+  if (!sh) throw new Error(`Sheet "${name}" not found. Create it first.`);
+  return sh;
+}
+
+function getHeaders(sh) {
+  const first = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  return first.map(h => String(h).trim());
+}
+
+function getPkColIndex(sheetName, headers) {
+  const pk  = PRIMARY_KEYS[sheetName];
+  if (!pk)  throw new Error(`No primary key configured for sheet "${sheetName}"`);
+  const idx = headers.indexOf(pk);
+  if (idx === -1) throw new Error(`Primary key column "${pk}" not found in ${sheetName} headers`);
+  return idx;
+}
+
+function jsonOut(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function jsonError(msg) {
+  return ContentService
+    .createTextOutput(JSON.stringify({ error: msg }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/* =========================================================
+   SEND ACTION EMAILS
+   recipients: [{email, name, actions:[{action, byDate, byMember}]}]
+   ========================================================= */
+function handleSendActionEmails(body) {
+  const { noteId, topic, date, noteLink, recipients } = body;
+  if (!recipients || !recipients.length) return { sent: 0 };
+
+  let sent = 0;
+  const errors = [];
+
+  recipients.forEach(r => {
+    if (!r.email) return;
+    try {
+      const fmtDate = (d) => {
+        if (!d) return "—";
+        const dt = new Date(d);
+        return isNaN(dt) ? d : dt.toLocaleDateString("en-AU", { day:"2-digit", month:"short", year:"numeric" });
+      };
+
+      const actionRows = r.actions.map(a =>
+        `<tr style="border-bottom:1px solid #e0e0e0;">
+          <td style="padding:8px 12px;">${a.action}</td>
+          <td style="padding:8px 12px;white-space:nowrap;">${fmtDate(a.byDate)}</td>
+        </tr>`
+      ).join("");
+
+      const html = `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1a1a2e;">
+          <div style="background:#1a3a4a;padding:20px 24px;border-radius:10px 10px 0 0;">
+            <h2 style="color:#ffffff;margin:0;font-size:18px;">Sydney Maritime Modellers Club</h2>
+            <p style="color:#a0b8c8;margin:4px 0 0;font-size:13px;">Action assigned to you</p>
+          </div>
+          <div style="background:#f8f9fa;padding:24px;border-radius:0 0 10px 10px;">
+            <p style="margin:0 0 16px;">Hi ${r.name || ""},</p>
+            <p style="margin:0 0 16px;">You have been assigned the following action(s) on a note recorded ${fmtDate(date)}:</p>
+
+            <div style="background:#ffffff;border:1px solid #dee2e6;border-radius:8px;overflow:hidden;margin-bottom:20px;">
+              <div style="background:#e8f0f5;padding:10px 12px;font-weight:600;font-size:13px;">
+                📋 Note: ${topic}
+              </div>
+              <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead>
+                  <tr style="background:#f1f3f5;">
+                    <th style="padding:8px 12px;text-align:left;">Action</th>
+                    <th style="padding:8px 12px;text-align:left;">Due By</th>
+                  </tr>
+                </thead>
+                <tbody>${actionRows}</tbody>
+              </table>
+            </div>
+
+            <p style="margin:0 0 20px;font-size:13px;color:#555;">
+              Please review and complete your actions by the due dates above.
+            </p>
+
+            <a href="${noteLink}" style="display:inline-block;background:#1a3a4a;color:#ffffff;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600;">
+              View Full Note →
+            </a>
+
+            <p style="margin:24px 0 0;font-size:11px;color:#888;">
+              This is an automated notification from the SMMC Admin Portal.
+              Do not reply to this email.
+            </p>
+          </div>
+        </div>`;
+
+      GmailApp.sendEmail(
+        r.email,
+        `[SMMC] Action assigned — ${topic} (${fmtDate(date)})`,
+        // Plain text fallback
+        `Hi ${r.name || ""},\n\nYou have been assigned action(s) on the note "${topic}" dated ${fmtDate(date)}.\n\n` +
+        r.actions.map(a => `• ${a.action} — due ${fmtDate(a.byDate)}`).join("\n") +
+        `\n\nView note: ${noteLink}\n\nSMMC Admin Portal`,
+        { htmlBody: html, name: "SMMC Admin Portal" }
+      );
+      sent++;
+    } catch(e) {
+      errors.push({ email: r.email, error: e.message });
+    }
+  });
+
+  auditLog("EMAIL", "Actions", noteId, `Sent to ${sent} recipient(s)${errors.length ? "; errors: " + JSON.stringify(errors) : ""}`);
+  return { sent, errors };
+}
+
+/* =========================================================
+   ONE-TIME SETUP — run manually once to create sheet tabs
+   and header rows if they don't exist yet.
+   ========================================================= */
+function setupSheets() {
+  const ss = SpreadsheetApp.openById(SS_ID);
+
+  const schema = {
+    "Notes":    ["NoteID", "NoteRef", "Date", "Topic", "SubTopic", "Note", "Attachments", "CopyIn", "Status", "CreatedAt", "LastUpdated"],
+    "Actions":  ["ActionID", "NoteID", "Action", "By Date", "By Member", "By Member Email", "Status", "CreatedAt"],
+    "Topics":   ["TopicID", "Topic", "CreatedAt"],
+    "AuditLog": ["Timestamp", "User", "Action", "Sheet", "RecordID", "Detail"]
+  };
+
+  Object.entries(schema).forEach(([name, headers]) => {
+    let sh = ss.getSheetByName(name);
+    if (!sh) {
+      sh = ss.insertSheet(name);
+      Logger.log(`Created sheet: ${name}`);
+    }
+    // Only write headers if row 1 is blank
+    const existing = sh.getRange(1, 1).getValue();
+    if (!existing) {
+      sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+      sh.getRange(1, 1, 1, headers.length)
+        .setFontWeight("bold")
+        .setBackground("#1a3a4a")
+        .setFontColor("#ffffff");
+      Logger.log(`Headers written to: ${name}`);
+    }
+  });
+
+  Logger.log("Setup complete.");
+}
