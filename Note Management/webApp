@@ -43,13 +43,17 @@ function doGet(e) {
     const action = (e.parameter.action || "fetch").toLowerCase();
     const sheet  = e.parameter.sheet  || "";
 
+    if (action === "drivesearch") {
+      return jsonOut(handleDriveSearch(e.parameter.q || ""));
+    }
+
     if (!sheet) return jsonError("Missing ?sheet= parameter");
 
     if (action === "fetch") {
       return jsonOut(handleFetch(sheet));
     }
 
-    return jsonError("GET only supports action=fetch");
+    return jsonError("GET only supports action=fetch or action=drivesearch");
   } catch (err) {
     return jsonError(err.message);
   }
@@ -57,11 +61,11 @@ function doGet(e) {
 
 function doPost(e) {
   try {
-    const body   = JSON.parse(e.postData.contents || "{}");
+    const body   = JSON.parse(e.postData.contents);
     const action = (body.action || "").toLowerCase();
     const sheet  = body.sheet  || "";
 
-    // sendActionEmails doesn't need a sheet
+    // sendActionEmails doesn't need a sheet param
     if (action === "sendactionemails") {
       return jsonOut(handleSendActionEmails(body));
     }
@@ -83,19 +87,18 @@ function doPost(e) {
    FETCH — return all rows as array of {header: value} objects
    ========================================================= */
 function handleFetch(sheetName) {
-  const sh    = getSheet(sheetName);
-  const last  = sh.getLastRow();
-  const lastC = sh.getLastColumn();
-  if (last < 1 || lastC < 1) return [];
+  const sh      = getSheet(sheetName);
+  const data    = sh.getDataRange().getValues();
+  if (data.length < 2) return [];
 
-  // Return raw 2D array — admin.html's fetchSheet() handles header detection
-  const values = sh.getRange(1, 1, last, lastC).getValues();
-  return { values };
-}
-
-function json(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
+  const headers = data[0].map(h => String(h).trim());
+  return data.slice(1)
+    .filter(row => row.some(c => String(c).trim() !== ""))
+    .map(row => {
+      const obj = {};
+      headers.forEach((h, i) => { if (h) obj[h] = row[i] !== undefined ? row[i] : ""; });
+      return obj;
+    });
 }
 
 /* =========================================================
@@ -353,6 +356,30 @@ function handleSendActionEmails(body) {
 
   auditLog("EMAIL", "Actions", noteId, `Sent to ${sent} recipient(s)${errors.length ? "; errors: " + JSON.stringify(errors) : ""}`);
   return { sent, errors };
+}
+
+/* =========================================================
+   DRIVE SEARCH — returns files matching query
+   ========================================================= */
+function handleDriveSearch(query) {
+  if (!query) return { files: [] };
+  const results = DriveApp.searchFiles(
+    `title contains '${query.replace(/'/g, "\\'")}' and trashed = false`
+  );
+  const files = [];
+  let count = 0;
+  while (results.hasNext() && count < 20) {
+    const f = results.next();
+    files.push({
+      id:           f.getId(),
+      name:         f.getName(),
+      url:          f.getUrl(),
+      mimeType:     f.getMimeType(),
+      modifiedTime: f.getLastUpdated().toISOString()
+    });
+    count++;
+  }
+  return { files };
 }
 
 /* =========================================================
