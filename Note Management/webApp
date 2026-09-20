@@ -57,38 +57,21 @@ function doGet(e) {
 
 function doPost(e) {
   try {
-    let payload;
-    try {
-        payload = JSON.parse(e.postData.contents || '{}');
-    } catch (err) {
-        return json({ error: 'Invalid JSON payload: ' + err.message }, 400);
-    }
+    const body   = JSON.parse(e.postData.contents || "{}");
+    const action = (body.action || "").toLowerCase();
+    const sheet  = body.sheet  || "";
 
-    const action = payload.action;
-    const sheetName = payload.sheet;
-
-    if (!action) {
-        return json({ error: 'Missing action' }, 400);
-    }
-
-    if (!sheetName) {
-        return json({ error: 'Missing sheet name' }, 400);
-    }
-
-    const sheet = getSheetByName(sheetName);
-    if (!sheet) {
-        return json({ error: 'Sheet not found: ' + sheetName }, 404);
-    }
-
-    // sendActionEmails doesn't need a sheet param
+    // sendActionEmails doesn't need a sheet
     if (action === "sendactionemails") {
-      return jsonOut(handleSendActionEmails(payload));
+      return jsonOut(handleSendActionEmails(body));
     }
+
+    if (!sheet) return jsonError("Missing sheet in POST body");
 
     switch (action) {
-      case "append": return jsonOut(handleAppend(sheet, payload.rowData));
-      case "update": return jsonOut(handleUpdate(sheet, payload.hexKey, payload.updates));
-      case "delete": return jsonOut(handleDelete(sheet, payload.hexKey));
+      case "append": return jsonOut(handleAppend(sheet, body.rowData));
+      case "update": return jsonOut(handleUpdate(sheet, body.hexKey, body.updates));
+      case "delete": return jsonOut(handleDelete(sheet, body.hexKey));
       default:       return jsonError("Unknown action: " + action);
     }
   } catch (err) {
