@@ -22,6 +22,7 @@ $projects = @{
     "Liquid Glass html" = "1UGHQZksw14UkEdx2Z-W3lJUhTwy-6ZNENrVF2LF44oa_6t2Whh6jZVYC"
     "Get File Sheets" = "1kbAni013fUAaV1M7bl5lPHmkL4SqT5tv2lFPRV3zkJ3wR7Bo-zizoxLA"
     "Image Generator" = "1qHQmJtB2A9-fR68FNqaCbiTThrf0GSOb53L7y0uP4mUOxOs0amrq2Pct"
+    "Gateway" = "AKfycbzXQNKK6rbWr7MerjKjQMrF0-LUJzKij0sxTxRGehGAp3GoM7q6GXc0yMMmLVInHSR_"
 }
 
 $baseDir = "d:\AI Coding\smmc-AI"
