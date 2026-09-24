@@ -255,10 +255,10 @@ function getSheetLayout(domain, sheetName) {
 // ── doGet ─────────────────────────────────────────────────────────
 
 function doGet(e) {
-  let action, domain, sheetName, hexKey;
+  let action, domain, sheetName, hexKey, filtersArray;
   try {
     const params = e?.parameter || {};
-    ({ action, domain, sheet: sheetName, hexKey } = params);
+    ({ action, domain, sheet: sheetName, hexKey, filtersArray } = params);
     let rows = null;
     const sheet       = getSheet(domain, sheetName);
     const allValues   = sheet.getDataRange().getValues();
