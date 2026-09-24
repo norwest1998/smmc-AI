@@ -232,7 +232,8 @@ function rowsToObjects(headers, values, skipFirst) {
 function getSheetLayout(domain, sheetName) {
   // If your domains map to different Spreadsheet IDs, map them here:
   // const ss = getSpreadsheetForDomain(domain);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const entry = getRegistryEntry(domain);
+  const ss = entry.spreadsheetId;
   const sheet = ss.getSheetByName(sheetName);
 
   if (!sheet) {
@@ -289,6 +290,10 @@ function doGet(e) {
         const record = rows.find(r => String(r[keyField]).trim() === String(hexKey).trim());
         if (!record) return json({ error: "Record not found" });
         return json({ record });
+
+      case "Search":
+        results = findResults(domain, sheet, filtersArray);
+        return json({ values: results });
 
       default:
         auditLog(action, domain, sheetName, hexKey, "", "Unknown action: " + action, "", "Failed");
@@ -452,3 +457,41 @@ function resetSchemaBaseline(domain, sheetName) {
   return { ok: false, error: "Entry not found" };
 }
 
+function findResults(domain, sheetName, filtersArray) {
+  // 1. Fetch sheet configuration from registry
+  const sheetConfig = getSheetConfig(domain, sheetName);
+  if (!sheetConfig) {
+    throw new Error(Configuration not found for domain: ${domain}, sheet: ${sheetName});
+  }
+  // Resolve actual sheet name if default was used
+  const activeSheetName = sheetName || getRegistryEntry(domain)?.defaultSheet;
+  // 2. Fetch the spreadsheet data
+  const sheet = getSheet(domain, activeSheetName);
+  const data = sheet.getDataRange().getValues();
+  // 3. Extract the exact header row based on config (converting 1-based index to 0-based)
+  const headerIndex = sheetConfig.headerRow - 1;
+  const rawHeaders = data[headerIndex];
+  if (!rawHeaders) {throw new Error(Header row at index ${sheetConfig.headerRow} could not be found in the sheet.);}
+  // Map headers to lowercase for flexible matching
+  const headers = rawHeaders.map(h => String(h).trim().toLowerCase());
+  // 4. Extract data rows (slice everything after the header row)
+  const rows = data.slice(sheetConfig.headerRow);
+  // 5. Transform filters array into a lookup object
+  const filters = {};filtersArray.forEach(f => {filters[f.key.toLowerCase()] = f.value;});
+  // 6. Filter the rows
+  const filteredRows = rows.filter(
+    row => {
+      return Object.entries(filters).every(
+        ([filterKey, filterValue]) => {
+        const columnIndex = headers.indexOf(filterKey);
+        // If the column doesn't exist in the sheet, skip filtering on it
+        if (columnIndex === -1) return false;
+        // Exact check against the cell content
+        return row[columnIndex] === filterValue;
+        }
+      );
+    }
+  );
+  // 7. Return the data with the raw headers preserved at the top
+  return [rawHeaders, ...filteredRows];
+}
