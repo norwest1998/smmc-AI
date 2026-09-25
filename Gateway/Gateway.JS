@@ -295,6 +295,15 @@ function doGet(e) {
         results = findResults(domain, sheet, filtersArray);
         return json({ values: results });
 
+      case "listFolder":
+        return listDriveFolder(params.folderId);
+
+      case "readFile":
+        return readDriveFile(params.fileId);
+
+      case "triggerProcessing":
+        return triggerResultsScheduler();
+
       default:
         auditLog(action, domain, sheetName, hexKey, "", "Unknown action: " + action, "", "Failed");
         return json({ error: `Unknown action: ${action}` });
@@ -367,6 +376,10 @@ function doPost(e) {
         return json({ success: true, updatedCount });
       case "registerSchema":
         return jsonResponse(upsertSchemaRegistry(body));
+
+      case "triggerProcessing":
+        return triggerResultsScheduler();
+        
       default:   
         auditLog(action, domain, sheetName, hexKey, "", "Unknown action" + action, "", "Failed");
         return json({ error: `Unknown action: ${action}` });
@@ -494,4 +507,39 @@ function findResults(domain, sheetName, filtersArray) {
   );
   // 7. Return the data with the raw headers preserved at the top
   return [rawHeaders, ...filteredRows];
+}
+
+function listDriveFolder(folderId) {
+    const folder = DriveApp.getFolderById(folderId);
+    const files = [];
+    const it = folder.getFiles();
+    while (it.hasNext()) {
+        const f = it.next();
+        files.push({
+            id:          f.getId(),
+            name:        f.getName(),
+            createdTime: f.getDateCreated().toISOString(),
+            description: f.getDescription() || ""
+        });
+    }
+    return ContentService
+        .createTextOutput(JSON.stringify({ files }))
+        .setMimeType(ContentService.MimeType.JSON);
+}
+
+function readDriveFile(fileId) {
+    const file    = DriveApp.getFileById(fileId);
+    const content = JSON.parse(file.getBlob().getDataAsString());
+    return ContentService
+        .createTextOutput(JSON.stringify({ content }))
+        .setMimeType(ContentService.MimeType.JSON);
+}
+
+function triggerResultsScheduler() {
+    // Locate and run the scheduler function directly
+    // (same as what the time-based trigger calls)
+    ResultsScheduler(); // replace with your actual function name
+    return ContentService
+        .createTextOutput(JSON.stringify({ message: "Scheduler triggered." }))
+        .setMimeType(ContentService.MimeType.JSON);
 }
