@@ -11,7 +11,7 @@ function doGet(e) {
 function handleGet_(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName('Web doGet Datasheet');
-  const data = sheet.getDataRange().getValues();
+  const sheetData = sheet.getDataRange().getValues();
 
   const type = e.parameter.type;
   const load = e.parameter.load;
@@ -56,7 +56,7 @@ function handleGet_(e) {
     return respondWithPage_(title, cardsHtml);
   }
 
-  if (e.parameter.type === "calendar") {
+  if (e.parameter.type === "calendar" || e.parameter.type === "getCalendar") {
     const calSheet = ss.getSheetByName('Event Data');
     if (!calSheet) {
       return ContentService
@@ -64,7 +64,11 @@ function handleGet_(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
   
-    const calData        = calSheet.getDataRange().getValues();
+    const calData = calSheet.getDataRange().getValues();
+    if (e.parameter.type === "getCalendar"){
+      return json({ calData });
+    }
+    
     const today = new Date();
     const target = new Date(today.getFullYear(), today.getMonth() + 2, 1);
     const threeMonthsOut = new Date(target.getFullYear(), target.getMonth() + 1, 0);
@@ -172,10 +176,10 @@ function handleGet_(e) {
   const dailyData = dailySheet ? dailySheet.getDataRange().getValues() : [];
 
   if (e.parameter.type === "data") {
-        const date = data[0][0];
+        const date = sheetData[0][0];
         const events = [];
         for (let i = 1; i < data.length; i++) {
-          var event = data[i];
+          var event = sheetData[i];
           events.push({
             date: date, 
             name: event[0],
@@ -230,10 +234,10 @@ function handleGet_(e) {
             <div class="time">${time}</div>
             <div class="temp">
               <span class="temp" style="color: ${tempColor};">
-                ${temp}°
+                ${temp}°c
               </span>
             </div>
-            <div class="wind">${wind}</div>
+            <div class="wind">${wind} kts</div>
             <div class="rain">${(w[6] || 0)} mm</div>
             <div class="uvRow">
               <span class="uvVal" style="color: ${uvColor};">
@@ -275,43 +279,56 @@ function handleGet_(e) {
   }
 }
 
-
-
 function doPost(e) {
-  const body = JSON.parse(e.postData.contents);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(body.sheet);
+  try {
+    const body = JSON.parse(e.postData.contents);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(body.sheet);
 
-  if (body.action === "runRegionalConflicts") {
-    const result = checkRegionalConflicts();
+    console.log("action: " + body.action);
     
-    return ContentService.createTextOutput(
-      JSON.stringify({result})
-      )
+    if (body.action === "runRegionalConflicts") {
+      const result = checkRegionalConflicts(); // Ensure this function does not contain SpreadsheetApp.getUi()
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "exportToCalendar") {
+      const result = syncEventToGoogleCalendar(body.hexKey);
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (!sheet) {
+      return json({ error: `Sheet not found: ${body.sheet}` });
+    }
+
+    if (body.action === "update") {
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      const hexCol = headers.indexOf("HexKey") + 1;
+      const data = sheet.getDataRange().getValues();
+      const rowIndex = data.findIndex(r => r[hexCol - 1] === body.hexKey);
+      
+      if (rowIndex === -1) return json({ error: "HexKey not found" });
+
+      Object.entries(body.updates).forEach(([field, value]) => {
+        const col = headers.indexOf(field) + 1;
+        if (col > 0) sheet.getRange(rowIndex + 1, col).setValue(value);
+      });
+      return json({ success: true });
+    }
+
+    if (body.action === "append") {
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      const row = headers.map(h => body.rowData[h] ?? "");
+      sheet.appendRow(row);
+      return json({ success: true });
+    }
+
+    return json({ error: "Unknown action" });
+
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ error: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
   }
-
-  if (body.action === "update") {
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const hexCol = headers.indexOf("HexKey") + 1;
-    const data = sheet.getDataRange().getValues();
-    const rowIndex = data.findIndex(r => r[hexCol - 1] === body.hexKey);
-    if (rowIndex === -1) return json({ error: "HexKey not found" }, 404);
-
-    Object.entries(body.updates).forEach(([field, value]) => {
-      const col = headers.indexOf(field) + 1;
-      if (col > 0) sheet.getRange(rowIndex + 1, col).setValue(value);
-    });
-    return json({ success: true });
-  }
-
-  if (body.action === "append") {
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const row = headers.map(h => body.rowData[h] ?? "");
-    sheet.appendRow(row);
-    return json({ success: true });
-  }
-
-  return json({ error: "Unknown action" }, 400);
 }
-
