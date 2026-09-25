@@ -135,122 +135,21 @@ const REGISTRY = [
         }
       }
     }
-  }
-];
-
-// ── Registry Helpers ──────────────────────────────────────────────
-
-function getRegistryEntry(domain) {
-  const entry = REGISTRY.find(r => r && r[domain]);
-  if (!entry) throw new Error(`Unknown domain: ${domain}`);
-  return entry[domain];
-}
-
-function getSheet(domain, sheetName) {
-  const entry = getRegistryEntry(domain);
-  const targetSheet = sheetName || entry.defaultSheet;
-  const sheet = SpreadsheetApp.openById(entry.spreadsheetId).getSheetByName(targetSheet);
-  if (!sheet) throw new Error(`Sheet not found: ${targetSheet}`);
-  return sheet;
-}
-
-function getSheetConfig(domain, sheetName) {
-  const entry = getRegistryEntry(domain);
-  const targetSheet = sheetName || entry.defaultSheet;
-  return entry.sheets?.[targetSheet] ?? null;
-}
-
-function getKeyField(domain, sheetName) {
-  return getSheetConfig(domain, sheetName)?.key ?? null;
-}
-
-function getRegistryHeaders(domain, sheetName) {
-  return getSheetConfig(domain, sheetName)?.headers ?? null;
-}
-
-// ── Value Diff Checker ────────────────────────────────────────────
-
-function isValueChanged(before, after) {
-  if (before === after) return false;
-
-  // Handle Apps Script Date objects from getValues()
-  if (before instanceof Date) {
-    const afterDate = new Date(after);
-    if (!isNaN(afterDate.getTime())) {
-      return before.getTime() !== afterDate.getTime();
+  },
+  {
+    "requests": {
+      "spreadsheetId": "1AVopdio8GLzwYGQjiX7qiVBXWQVpmArmaGBLWYTHxrM",
+      "defaultSheet": "AvgScrReq",
+      "sheets": {
+        "AvgScrReq": {
+          "headers": ["Request ID", "Timestamp", "Member Name", "Member Email", "EventID", "Date", "Class", "Regatta Type", "Conflicting Regatta", "Status", "Rejected Reason", "Decision By",	"Decision Date", "Email Sent"],
+          "key": "Request ID",
+          "headerRow": 1
+        }
+      }
     }
   }
-
-  // Normalize string comparisons to ignore type mismatches like 10 vs "10" or empty string vs null
-  const strBefore = (before === null || before === undefined) ? "" : String(before).trim();
-  const strAfter  = (after === null || after === undefined)   ? "" : String(after).trim();
-
-  return strBefore !== strAfter;
-}
-
-// ── Audit Log ─────────────────────────────────────────────────────
-
-function auditLog(action, domain, sheetName, recordId, field, before, after, success) {
-  try {
-    const sh      = getSheet("audit", "AuditLog");
-    const headers = getRegistryHeaders("audit", "AuditLog");
-    const user    = Session.getActiveUser().getEmail() || "unknown";
-    const entry   = {
-      HexCode:    recordId,
-      Timestamp:  new Date().toISOString(),
-      User:       user,
-      Action:     action,
-      Domain:     domain,
-      Sheet:      sheetName,
-      Detail:     field,
-      "Old Value": typeof before === "object" && before !== null ? JSON.stringify(before) : String(before ?? ""),
-      "New Value": typeof after  === "object" && after !== null  ? JSON.stringify(after)  : String(after  ?? ""),
-      Success:    success
-    };
-    sh.appendRow(headers.map(h => entry[h] ?? ""));
-  } catch(e) {
-    console.error("AuditLog failed:", e.message);
-  }
-}
-
-// ── Response Helper ───────────────────────────────────────────────
-
-function json(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-// ── Row Mapping ───────────────────────────────────────────────────
-
-function rowsToObjects(headers, values, skipFirst) {
-  return (skipFirst ? values.slice(1) : values)
-    .filter(r => r && r.some(c => c !== ""))
-    .map(r => Object.fromEntries(headers.map((h, i) => [h, r[i] ?? ""])));
-}
-
-// ── Layout Scraper ───────────────────────────────────────────────────
-function getSheetLayout(domain, sheetName) {
-  // If your domains map to different Spreadsheet IDs, map them here:
-  // const ss = getSpreadsheetForDomain(domain);
-  const entry = getRegistryEntry(domain);
-  const ss = entry.spreadsheetId;
-  const sheet = ss.getSheetByName(sheetName);
-
-  if (!sheet) {
-    throw new Error(`Sheet "${sheetName}" not found in domain "${domain}".`);
-  }
-
-  const lastColumn = sheet.getLastColumn();
-  if (lastColumn === 0) {
-    return [];
-  }
-
-  // Fetch the first row (column headers)
-  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
-
-  // Return non-empty string headers
-  return headers.map(String).map(h => h.trim()).filter(Boolean);
-}
+];
 
 // ── doGet ─────────────────────────────────────────────────────────
 
@@ -268,7 +167,7 @@ function doGet(e) {
     const keyField    = getKeyField(domain, sheetName);
     const headers     = regHeaders ?? allValues[headerRow].map(h => String(h).trim());
     const dataValues  = allValues.slice(headerRow + 1);         // rows after header
-
+console.log("doGet Action: " + action + " Domain: " + domain + " Sheet: " + sheet);
     if (!sheet) {
       return json({ error: 'Missing required "sheetName" parameter.' });
      }
@@ -317,6 +216,7 @@ function doGet(e) {
 
 // ── doPost ────────────────────────────────────────────────────────
 
+
 function doPost(e) {
   let action, domain, sheetName, hexKey;
   try {
@@ -335,7 +235,7 @@ function doPost(e) {
     const headers     = regHeaders ?? allValues[headerRow].map(h => String(h).trim());
     const dataRows    = allValues.slice(headerRow + 1);          // rows after header
     const keyCol      = headers.indexOf(keyField);
-
+console.log("doPost Action: " + action + " Domain: " + domain + " Sheet: " + sheet);
     switch (action) {
       case"append":
         const row = headers.map(h => rowData[h] ?? "");
@@ -375,10 +275,13 @@ function doPost(e) {
         });
         return json({ success: true, updatedCount });
       case "registerSchema":
-        return jsonResponse(upsertSchemaRegistry(body));
+        return json(upsertSchemaRegistry(body));
 
       case "triggerProcessing":
         return triggerResultsScheduler();
+
+      case "appendAvgScrReq":
+        return appendAverageScoreRequest(action, domain, sheet, rowData);
         
       default:   
         auditLog(action, domain, sheetName, hexKey, "", "Unknown action" + action, "", "Failed");
@@ -389,6 +292,161 @@ function doPost(e) {
     return json({ error: err.message });
   }
 }
+
+// ── Registry Helpers ──────────────────────────────────────────────
+
+function getRegistryEntry(domain) {
+  const entry = REGISTRY.find(r => r && r[domain]);
+  if (!entry) throw new Error(`Unknown domain: ${domain}`);
+  return entry[domain];
+}
+
+function getSheet(domain, sheetName) {
+  const entry = getRegistryEntry(domain);
+  const targetSheet = sheetName || entry.defaultSheet;
+  const sheet = SpreadsheetApp.openById(entry.spreadsheetId).getSheetByName(targetSheet);
+  if (!sheet) throw new Error(`Sheet not found: ${targetSheet}`);
+  return sheet;
+}
+
+function getSheetConfig(domain, sheetName) {
+  const entry = getRegistryEntry(domain);
+  const targetSheet = sheetName || entry.defaultSheet;
+  return entry.sheets?.[targetSheet] ?? null;
+}
+
+function getKeyField(domain, sheetName) {
+  return getSheetConfig(domain, sheetName)?.key ?? null;
+}
+
+function getRegistryHeaders(domain, sheetName) {
+  return getSheetConfig(domain, sheetName)?.headers ?? null;
+}
+
+// ── Layout Scraper ───────────────────────────────────────────────────
+function getSheetLayout(domain, sheetName) {
+  // If your domains map to different Spreadsheet IDs, map them here:
+  // const ss = getSpreadsheetForDomain(domain);
+  const entry = getRegistryEntry(domain);
+  const ss = entry.spreadsheetId;
+  const sheet = ss.getSheetByName(sheetName);
+
+  if (!sheet) {
+    throw new Error(`Sheet "${sheetName}" not found in domain "${domain}".`);
+  }
+
+  const lastColumn = sheet.getLastColumn();
+  if (lastColumn === 0) {
+    return [];
+  }
+
+  // Fetch the first row (column headers)
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+
+  // Return non-empty string headers
+  return headers.map(String).map(h => h.trim()).filter(Boolean);
+}
+
+// ── Value Diff Checker ────────────────────────────────────────────
+
+function isValueChanged(before, after) {
+  if (before === after) return false;
+
+  // Handle Apps Script Date objects from getValues()
+  if (before instanceof Date) {
+    const afterDate = new Date(after);
+    if (!isNaN(afterDate.getTime())) {
+      return before.getTime() !== afterDate.getTime();
+    }
+  }
+
+  // Normalize string comparisons to ignore type mismatches like 10 vs "10" or empty string vs null
+  const strBefore = (before === null || before === undefined) ? "" : String(before).trim();
+  const strAfter  = (after === null || after === undefined)   ? "" : String(after).trim();
+
+  return strBefore !== strAfter;
+}
+
+// ── Audit Log ─────────────────────────────────────────────────────
+// Log all updates, deletes and appends...
+function auditLog(action, domain, sheetName, recordId, field, before, after, success) {
+  try {
+    const sh      = getSheet("audit", "AuditLog");
+    const headers = getRegistryHeaders("audit", "AuditLog");
+    const user    = Session.getActiveUser().getEmail() || "unknown";
+    const entry   = {
+      HexCode:    recordId,
+      Timestamp:  new Date().toISOString(),
+      User:       user,
+      Action:     action,
+      Domain:     domain,
+      Sheet:      sheetName,
+      Detail:     field,
+      "Old Value": typeof before === "object" && before !== null ? JSON.stringify(before) : String(before ?? ""),
+      "New Value": typeof after  === "object" && after !== null  ? JSON.stringify(after)  : String(after  ?? ""),
+      Success:    success
+    };
+    sh.appendRow(headers.map(h => entry[h] ?? ""));
+  } catch(e) {
+    console.error("AuditLog failed:", e.message);
+  }
+}
+
+// ── Response Helper ───────────────────────────────────────────────
+
+function json(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ── Row Mapping ───────────────────────────────────────────────────
+
+function rowsToObjects(headers, values, skipFirst) {
+  return (skipFirst ? values.slice(1) : values)
+    .filter(r => r && r.some(c => c !== ""))
+    .map(r => Object.fromEntries(headers.map((h, i) => [h, r[i] ?? ""])));
+}
+
+// -- Store Average Score request -----------------------
+function appendAverageScoreRequest(action, domain, sheet, rowData) {
+  const entry = getRegistryEntry(domain);
+  var ss = SpreadsheetApp.getActiveSpreadsheet(entry.spreadsheetId); 
+  var sheet = ss.getSheetByName("AvgScrReq");
+
+  if (!sheet) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: "Sheet tab 'AvgScrReq' not found in spreadsheet."
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  // Map payload fields to spreadsheet column layout
+  var newRow = [
+    rowData.requestId || "",
+    rowData.timestamp || new Date().toISOString(),
+    rowData.memberName || "",
+    rowData.memberEmail || "",
+    rowData.eventDate || "",
+    rowData.boatClass || "",
+    rowData.regattaType || "",
+    rowData.eventName || "",
+    rowData.conflictingRegatta || "",
+    rowData.status || "Received",
+    "", // Decision Date
+    "", // Decision By
+    ""  // Rejected Reason
+  ];
+
+  sheet.appendRow(newRow);
+  auditLog("append", domain, sheet, payload.requestId, action, "", rowData, "Success");
+
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "success",
+    message: "Request successfully created.",
+    requestId: payload.requestId
+  })).setMimeType(ContentService.MimeType.JSON);
+
+}
+
 
 // ------------------------------------------------------------
 // SHEET SETUP
@@ -402,7 +460,8 @@ function setupSchemaRegistry() {
     "Row Count", "Last Checked", "Status"
   ];
 
-  const ss = getSpreadsheet("audit"); // replace with however you look up your audit spreadsheet
+  const entry = getRegistryEntry("audit"); // replace with however you look up your audit spreadsheet
+  const ss = SpreadsheetApp.openById(entry.spreadsheetId);
   let sheet = ss.getSheetByName(REGISTRY_SHEET);
   if (!sheet) {
     sheet = ss.insertSheet(REGISTRY_SHEET);
@@ -413,6 +472,7 @@ function setupSchemaRegistry() {
 }
 
 // ------------------------------------------------------------
+// Shema Monitoring
 // UPSERT  — called by the web-app doPost handler
 // payload: { domain, sheet, columns: string[], rowCount: number }
 // ------------------------------------------------------------
@@ -444,18 +504,6 @@ function upsertSchemaRegistry(payload) {
   return { ok: true, status: "OK" };
 }
 
-// ------------------------------------------------------------
-// READ  — fetch all registry rows (called via action=fetch on
-//          domain=audit, sheet=SchemaRegistry, same as AuditLog)
-// No extra gateway code needed if your existing fetch handler
-// already reads any named sheet from the audit spreadsheet.
-// ------------------------------------------------------------
-
-
-// ------------------------------------------------------------
-// RESET BASELINE  — call manually or via an admin button to
-// accept the current columns as the new baseline (clears DRIFT)
-// ------------------------------------------------------------
 function resetSchemaBaseline(domain, sheetName) {
   const regSheet = setupSchemaRegistry();
   const data = regSheet.getDataRange().getValues();
@@ -474,24 +522,23 @@ function findResults(domain, sheetName, filtersArray) {
   // 1. Fetch sheet configuration from registry
   const sheetConfig = getSheetConfig(domain, sheetName);
   if (!sheetConfig) {
-    throw new Error(Configuration not found for domain: ${domain}, sheet: ${sheetName});
+    throw new Error(`Configuration not found for domain: ${domain}, sheet: ${sheetName}`);
   }
-  // Resolve actual sheet name if default was used
+
   const activeSheetName = sheetName || getRegistryEntry(domain)?.defaultSheet;
-  // 2. Fetch the spreadsheet data
   const sheet = getSheet(domain, activeSheetName);
   const data = sheet.getDataRange().getValues();
-  // 3. Extract the exact header row based on config (converting 1-based index to 0-based)
+
   const headerIndex = sheetConfig.headerRow - 1;
   const rawHeaders = data[headerIndex];
-  if (!rawHeaders) {throw new Error(Header row at index ${sheetConfig.headerRow} could not be found in the sheet.);}
-  // Map headers to lowercase for flexible matching
+  if (!rawHeaders) {
+    throw new Error(`Header row at index ${sheetConfig.headerRow} could not be found in the sheet.`);
+    }
+
   const headers = rawHeaders.map(h => String(h).trim().toLowerCase());
-  // 4. Extract data rows (slice everything after the header row)
   const rows = data.slice(sheetConfig.headerRow);
-  // 5. Transform filters array into a lookup object
+
   const filters = {};filtersArray.forEach(f => {filters[f.key.toLowerCase()] = f.value;});
-  // 6. Filter the rows
   const filteredRows = rows.filter(
     row => {
       return Object.entries(filters).every(
@@ -505,41 +552,6 @@ function findResults(domain, sheetName, filtersArray) {
       );
     }
   );
-  // 7. Return the data with the raw headers preserved at the top
+
   return [rawHeaders, ...filteredRows];
-}
-
-function listDriveFolder(folderId) {
-    const folder = DriveApp.getFolderById(folderId);
-    const files = [];
-    const it = folder.getFiles();
-    while (it.hasNext()) {
-        const f = it.next();
-        files.push({
-            id:          f.getId(),
-            name:        f.getName(),
-            createdTime: f.getDateCreated().toISOString(),
-            description: f.getDescription() || ""
-        });
-    }
-    return ContentService
-        .createTextOutput(JSON.stringify({ files }))
-        .setMimeType(ContentService.MimeType.JSON);
-}
-
-function readDriveFile(fileId) {
-    const file    = DriveApp.getFileById(fileId);
-    const content = JSON.parse(file.getBlob().getDataAsString());
-    return ContentService
-        .createTextOutput(JSON.stringify({ content }))
-        .setMimeType(ContentService.MimeType.JSON);
-}
-
-function triggerResultsScheduler() {
-    // Locate and run the scheduler function directly
-    // (same as what the time-based trigger calls)
-    ResultsScheduler(); // replace with your actual function name
-    return ContentService
-        .createTextOutput(JSON.stringify({ message: "Scheduler triggered." }))
-        .setMimeType(ContentService.MimeType.JSON);
 }
