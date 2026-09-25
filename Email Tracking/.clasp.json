@@ -1,0 +1,14 @@
+{
+  "scriptId": "",
+  "rootDir": ".",
+  "scriptExtensions": [
+    ".js",
+    ".gs"
+  ],
+  "htmlExtensions": [
+    ".html"
+  ],
+  "jsonExtensions": [
+    ".json"
+  ]
+}
