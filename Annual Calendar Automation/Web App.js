@@ -56,7 +56,7 @@ function handleGet_(e) {
     return respondWithPage_(title, cardsHtml);
   }
 
-  if (e.parameter.type === "calendar" || e.parameter.type === "getCalendar") {
+  if (e.parameter.type === "calendar") {
     const calSheet = ss.getSheetByName('Event Data');
     if (!calSheet) {
       return ContentService
@@ -65,9 +65,7 @@ function handleGet_(e) {
     }
   
     const calData = calSheet.getDataRange().getValues();
-    if (e.parameter.type === "getCalendar"){
-      return json({ calData });
-    }
+    const allData = calData;
     
     const today = new Date();
     const target = new Date(today.getFullYear(), today.getMonth() + 2, 1);
@@ -138,7 +136,7 @@ function handleGet_(e) {
       .map(key => monthBuckets[key]);
   
     return ContentService
-      .createTextOutput(JSON.stringify({ months: sortedMonths }))
+      .createTextOutput(JSON.stringify({ months: sortedMonths },{ allEvents: allData }))
       .setMimeType(ContentService.MimeType.JSON);
   }
 
