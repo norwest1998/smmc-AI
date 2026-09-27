@@ -721,20 +721,19 @@ function injectStyle(html, css) {
   return styleTag + html;
 }
 
-function getRegattaEventsList() {
+function getRegattaEventsList(date, className) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName("Event Data"); 
 
   const data = sheet.getDataRange().getValues();
   const events = [];
-  var now = new Date();
 
   // Start from index 1 to skip header row (index 0)
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-    now.setDate(now.getDate() - 3); 
 
-    if (row[2] >= now && row[0]) {
+
+    if (row[2]) {
       events.push({
           id: row[0],
           date: Utilities.formatDate(row[2], ss.getSpreadsheetTimeZone(), 'dd/MM/yyyy'),

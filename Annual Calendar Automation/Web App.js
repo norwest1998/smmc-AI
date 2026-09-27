@@ -17,9 +17,11 @@ function handleGet_(e) {
   const load = e.parameter.load;
   const action = e.parameter.action;
   const sheetName = e.parameter.sheet;
+  const className = e.parameter.class;
+  const date = e.parameter.date;
 
   if (action === "RegattaEvents") {
-    return json({ events: getRegattaEventsList() });
+    return json({ events: getRegattaEventsList(date, className) });
   }
 
   if (action === "fetch") {
