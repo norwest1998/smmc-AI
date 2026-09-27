@@ -31,6 +31,20 @@ function resolveFormulaToken(position, competitorCount, tokens) {
   return tokens.includes(offsetToken) ? offsetToken : 'n';
 }
 
+function calculateAVGScore(allRoundScores, dncValues, targetRoundIdx, discardCount) {
+  const eligible = allRoundScores
+    .filter((_, i) => i !== targetRoundIdx)
+    .filter((score, i) => {
+      const idx = i >= targetRoundIdx ? i + 1 : i; // adjust for removed round
+      return typeof score === 'number' && score < dncValues[idx];
+    });
+
+  if (eligible.length === 0) return dncValues[targetRoundIdx]; // no sailed races, treat as DNC
+
+  const { net } = calculateNetWithDiscards(eligible, discardCount);
+  return Math.round((net / eligible.length) * 100) / 100;
+}
+
 function getHcapAdjustment({
   position,
   competitorCount,

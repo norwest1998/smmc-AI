@@ -51,12 +51,56 @@ function writeRoundColumn(sh, parsed, rankedScores, roundCount, lastRow) {
   console.log(`Round column written: ${roundLabel} (col ${roundColIdx}), DNC=${dncScore}`);
 }
 
+/**
+ * Replaces AVG-marked round scores with the calculated RRS A9 average.
+ * @param {string} bookID
+ * @param {number[][]} scoreRange - live scores grid [dataRow][roundCol]
+ * @param {number[]} dncValues - DNC per round
+ * @param {number} roundCount
+ * @param {number} discardCount
+ * @param {string[]} memberNames - ordered list matching scoreRange rows
+ */
+function applyAVGMarkers(scoreRange, dncValues, roundCount, discardNeeded, memberNames) {
+  const avgRequests = getApprovedAVGRequests(); // fetch from master data
+  if (!avgRequests.length) return scoreRange;
+
+  return scoreRange.map((rowScores, rowIdx) => {
+    const memberName = memberNames[rowIdx];
+    const updated = [...rowScores];
+
+    avgRequests
+      .filter(req => normalizeName(req.memberName) === normalizeName(memberName))
+      .forEach(req => {
+        // Find which round column this eventID maps to
+        const roundIdx = getRoundIndexForEvent(req.eventID);
+        if (roundIdx === -1) return;
+
+        const avg = calculateAVGScore(rowScores, dncValues, roundIdx, discardCount);
+        updated[roundIdx] = avg;
+        console.log(`AVG applied: ${memberName} round ${roundIdx + 1} = ${avg}`);
+      });
+
+    return updated;
+  });
+}
+
+function getRoundIndexForEvent(eventID) {
+  const roundNumber = checkRoundExists(eventID);
+  if (!roundNumber) return -1;
+  return roundNumber - 1;
+}
+
 function recalculateOverallTotals(sh, roundCount, lastRow) {
   const discardNeeded = getDiscardCount(roundCount);
   const dataRowCount = lastRow - OVERALL_DATA_START_ROW + 1;
-
   const dncValues = sh.getRange(OVERALL_META_ROW_1, 8, 1, roundCount).getValues()[0];
-  const scoreRange = sh.getRange(OVERALL_DATA_START_ROW, 8, dataRowCount, roundCount).getValues();
+  const memberNames = sh.getRange(OVERALL_DATA_START_ROW, 4, dataRowCount, 1).getValues().flat();
+  let scoreRange = sh.getRange(OVERALL_DATA_START_ROW, 8, dataRowCount, roundCount).getValues();
+
+  // *** NEW: substitute AVG scores before totalling ***
+  const bookID = sh.getParent().getId();
+  const regattaName = sh.getParent().getName(); // or pass via param
+  scoreRange = applyAVGMarkers(scoreRange, dncValues, roundCount, discardNeeded, memberNames);
 
   const finalCalculations = scoreRange.map(rowScores => {
     let attendanceCount = 0;

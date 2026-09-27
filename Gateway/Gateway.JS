@@ -76,8 +76,8 @@ const REGISTRY = [
   },
   {
     requests: {
-      spreadsheetId: "1AVopdio8GLzwYGQjiX7qiVBXWQVpmArmaGBLWYTHxrM",
-      defaultSheet: "Event Data",
+      spreadsheetId: "1FqOMVZnUbTUtruE5QJ_dmscabdMU7BuEHTfjysNuC18",
+      defaultSheet: "AvgScrReq",
       sheets: {
         AvgScrReq: {key: "Request ID", headerRow: 1,headers: ["Request ID","Timestamp","Member Name","Member Email","EventID","Date","Class","Regatta Type","Conflicting Regatta","Status","Rejected Reason","Decision By","Decision Date","Email Sent"]}
       }

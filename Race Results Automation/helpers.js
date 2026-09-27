@@ -248,3 +248,21 @@ function lockSheetForAutomation(sheet) {
     protection.setDomainEdit(false);
   }
 }
+/** Returns approved AVG requests for a regatta from master data sheet */
+function getApprovedAVGRequests(regattaName) {
+  const cfg = getConfig();
+  const ss = SpreadsheetApp.openById(cfg.masterDataSpreadsheetId);
+  const sheet = ss.getSheetByName('AVGRequests');
+  if (!sheet) return [];
+  return sheetToObjects(ss, 'AVGRequests', ['regattaName','eventID','memberName','boatID','status'])
+    .filter(r => normalizeName(r.regattaName) === normalizeName(regattaName) && r.status === 'APPROVED');
+}
+
+/** Maps an eventID to its 0-based round column index by reading the Overall Results metadata */
+function getRoundIndexForEvent(bookID, eventID, roundCount) {
+  // You'll need to store eventID→roundNumber in your round tracker.
+  // checkRoundExists(eventID) already returns the roundNumber.
+  const roundNumber = checkRoundExists(eventID);
+  if (!roundNumber) return -1;
+  return roundNumber - 1; // 0-based
+}
