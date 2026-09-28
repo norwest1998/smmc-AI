@@ -107,7 +107,9 @@ function markCalendarEventProcessed(eventId) {
   try {
     const ss = SpreadsheetApp.openById(spreadsheetId);
     const sheet = ss.getSheetByName(sheetName);
-
+    
+    // FIX: Define data before looping
+    const data = sheet.getDataRange().getValues(); 
     const targetId = String(eventId).trim();
 
     // Iterate through rows (skip header row)
@@ -115,14 +117,18 @@ function markCalendarEventProcessed(eventId) {
       const rowEventId = String(data[i][0]).trim(); // Column A (Index 0)
 
       if (rowEventId === targetId) {
-        // Update Column E (Column Index 5) -> Status
+        // Update Column O (Index 15) -> Status
         sheet.getRange(i + 1, 15).setValue('PROCESSED');
         Logger.log(`Successfully marked Event ID "${eventId}" as PROCESSED at Row ${i + 1}.`);
         return true;
       }
     }    
-    Logger.log(`Marked row ${rowIndex} as PROCESSED in sheet "${sheetName}".`);
+    // FIX: Removed undefined `rowIndex` reference
+    Logger.log(`Event ID "${eventId}" was not found in sheet "${sheetName}".`);
+    return false;
   } catch (error) {
-    Logger.log(`Error updating row ${rowIndex}: ` + error.toString());
+    // FIX: Removed undefined `rowIndex` reference
+    Logger.log(`Error updating calendar for Event ID "${eventId}": ` + error.toString());
+    return false;
   }
 }

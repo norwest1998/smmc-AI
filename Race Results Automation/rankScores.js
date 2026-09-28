@@ -1,16 +1,18 @@
 function rankScoresMap(scoreMap) {
-  // Clone to avoid mutating original
-  const ranked = scoreMap;
+  // clone the array AND sort it using tie-break rules before ranking
+  const ranked = [...scoreMap].sort(compareCompetitors);
 
   let currentRank = 1;
-  ranked[0].rank = currentRank;
+  if (ranked.length > 0) {
+    ranked[0].rank = currentRank;
+  }
 
   for (let i = 1; i < ranked.length; i++) {
     const prev = ranked[i - 1];
     const curr = ranked[i];
 
     if (compareCompetitors(prev, curr) === 0) {
-      // Ex Aequo
+      // Ex Aequo (Tie)
       curr.rank = prev.rank;
     } else {
       currentRank = i + 1;

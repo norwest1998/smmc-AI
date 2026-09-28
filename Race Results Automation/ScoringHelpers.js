@@ -161,6 +161,10 @@ function updateClassMemberHandicaps(updatedHandicaps, className) {
     // Row start: 2 (to skip headers), Column start: targetCol + 1 (1-indexed)
     sheet.getRange(2, targetCol + 1, handicapColumnValues.length, 1).setValues(handicapColumnValues);
     Logger.log(`Handicaps updated for ${updates} boat(s) in class: ${className}`);
+    
+    // VERY IMPORTANT: Invalidate the cache so subsequent runs get fresh handicaps
+    CacheService.getScriptCache().remove('MASTER_DATA_FULL');
+    MASTER_DATA_CACHE = null; 
   } else {
     Logger.log(`No handicap updates needed for class: ${className}`);
   }
@@ -205,45 +209,21 @@ function calculateNetWithDiscards(scores, discardCount) {
 }
 
 function getRegattaConfigByName(regattaName) {
-  const cfg = getConfig();
-  const ss = SpreadsheetApp.openById(cfg.masterDataSpreadsheetId);
-  const sheet = ss.getSheetByName('Regattas');
-  if (!sheet) throw new Error('Regattas sheet not found');
+  const md = getMasterData();
+  
+  // Format the target name to match how it was keyed in the map
+  const key = (regattaName || '').toString().trim().toLowerCase();
+  const regattaConfig = md.regattasByName[key];
 
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-
-  const col = name => headers.indexOf(name);
-
-  const nameCol     = col('ChampionshipName');
-  const formulaCol  = col('Hcap Formula');
-  const lt4Col      = col('<4');
-  const lt7Col      = col('<7');
-  const lt13Col     = col('<13');
-  const gte13Col    = col('13+');
-
-  if (
-    nameCol === -1 ||
-    formulaCol === -1 ||
-    lt4Col === -1 ||
-    lt7Col === -1 ||
-    lt13Col === -1 ||
-    gte13Col === -1
-  ) {
-    throw new Error('One or more required columns missing in Regattas sheet');
+  if (!regattaConfig) {
+    throw new Error(`Regatta configuration not found for ${regattaName}`);
   }
 
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][nameCol] === regattaName) {
-      return {
-        'Hcap Formula': data[i][formulaCol],
-        '<4':  data[i][lt4Col],
-        '<7':  data[i][lt7Col],
-        '<13': data[i][lt13Col],
-        '13+': data[i][gte13Col]
-      };
-    }
-  }
-
-  throw new Error(`Regatta configuration not found for ${regattaName}`);
+  return {
+    'Hcap Formula': regattaConfig['hcap formula'],
+    '<4':  regattaConfig['<4'],
+    '<7':  regattaConfig['<7'], // Matches the fixed key from loadMasterData
+    '<13': regattaConfig['<13'],
+    '13+': regattaConfig['13+']
+  };
 }

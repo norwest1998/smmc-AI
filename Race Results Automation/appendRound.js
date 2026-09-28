@@ -75,7 +75,7 @@ function applyAVGMarkers(scoreRange, dncValues, roundCount, discardNeeded, membe
         const roundIdx = getRoundIndexForEvent(req.eventID);
         if (roundIdx === -1) return;
 
-        const avg = calculateAVGScore(rowScores, dncValues, roundIdx, discardCount);
+        const avg = calculateAVGScore(rowScores, dncValues, roundIdx, discardNeeded);
         updated[roundIdx] = avg;
         console.log(`AVG applied: ${memberName} round ${roundIdx + 1} = ${avg}`);
       });
@@ -136,9 +136,11 @@ function applyTieBreakRanking(sh, roundCount, lastRow) {
 
   const scoreMap = names.map((name, i) => ({
     membername: name,
-    totalScore: netTotals[i],
+    net: netTotals[i], // FIX: Changed 'totalScore' to 'net'
     racescore: roundScores[i].filter(s => typeof s === 'number')
   }));
+
+  const scoresRanked = rankScoresMap(scoreMap);
 
   const scoresRanked = rankScoresMap(scoreMap);
 
