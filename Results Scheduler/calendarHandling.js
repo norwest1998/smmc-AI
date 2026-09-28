@@ -7,7 +7,8 @@
  * @return {Object|null} Object with event details and End Time Date, or null if none found.
  */
 function getNextUnprocessedEvent() {
-  const spreadsheetId = CONFIG.calendarSpreadsheetId;
+  const cfg = getConfig();
+  const spreadsheetId = cfg.calendarSpreadsheetId;
   const sheetName = 'Event Data';
 
   try {
@@ -101,14 +102,14 @@ function combineDateAndTime(dateObj, timeVal) {
  * @param {string} sheetName - Tab name (default: 'Calendar').
  */
 function markCalendarEventProcessed(eventId) {
-  const spreadsheetId = CONFIG.calendarSpreadsheetId;
+  const cfg = getConfig();
+  const spreadsheetId = cfg.calendarSpreadsheetId;
   const sheetName = 'Event Data';
 
   try {
     const ss = SpreadsheetApp.openById(spreadsheetId);
     const sheet = ss.getSheetByName(sheetName);
     
-    // FIX: Define data before looping
     const data = sheet.getDataRange().getValues(); 
     const targetId = String(eventId).trim();
 
@@ -123,12 +124,11 @@ function markCalendarEventProcessed(eventId) {
         return true;
       }
     }    
-    // FIX: Removed undefined `rowIndex` reference
     Logger.log(`Event ID "${eventId}" was not found in sheet "${sheetName}".`);
     return false;
   } catch (error) {
-    // FIX: Removed undefined `rowIndex` reference
     Logger.log(`Error updating calendar for Event ID "${eventId}": ` + error.toString());
-    return false;
+    // Throw error so the webhook transaction catches it and rolls back the sheets
+    throw new Error(`Calendar Update Failed: ${error.message}`); 
   }
 }

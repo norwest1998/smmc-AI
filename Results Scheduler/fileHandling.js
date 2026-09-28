@@ -4,17 +4,17 @@
  * @param {string} folderId - Google Drive Folder ID where JSON files land.
  * @return {DriveApp.File|null} The File object if found, or null if no file is present.
  */
-function getJsonFileFromFolder(folderId = CONFIG.raceUploadFolderId) {
+function getJsonFileFromFolder(folderId) {
   try {
-    const folder = DriveApp.getFolderById(folderId);
+    const cfg = getConfig();
+    const targetFolderId = folderId || cfg.raceUploadFolderId;
+    const folder = DriveApp.getFolderById(targetFolderId);
     
     // Get all files in the folder
     const files = folder.getFiles();
 
     while (files.hasNext()) {
       const file = files.next();
-      const fileName = file.getName().toLowerCase();
-
       if ((file.getDescription() || '').includes('Processed by SMMC Admin AI')) continue;
       Logger.log('Found JSON file: ' + file.getName() + ' (ID: ' + file.getId() + ')');
       return file;
@@ -29,8 +29,9 @@ function getJsonFileFromFolder(folderId = CONFIG.raceUploadFolderId) {
   } 
 }
 
-function archiveProcessedFile(file, archiveFolderId) {
+function archiveProcessedFile(fileId, archiveFolderId) {
   try {
+    const file = DriveApp.getFileById(fileId);
     const archiveFolder = DriveApp.getFolderById(archiveFolderId);
     file.moveTo(archiveFolder);
     Logger.log(`Moved ${file.getName()} to archive.`);
@@ -40,6 +41,8 @@ function archiveProcessedFile(file, archiveFolderId) {
     Logger.log(`File description updated for processing flag: ${file.getName()}`);
   } catch (e) {
     Logger.log('Error archiving file: ' + e.toString());
+    // Throw error so the webhook transaction catches it and rolls back the sheets
+    throw new Error(`Archiving Failed: ${e.message}`); 
   }
 }
 

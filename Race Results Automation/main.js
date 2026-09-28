@@ -2,7 +2,7 @@
  * Orchestrator
  * Parsing now performed in Race Results Scheduler
  */
-function processNewRegattaSheets(parsed, raceType) {
+function processNewRegattaSheets(parsed, raceType, fileId) { // Add fileId param
   const ctx = createRoundContext(parsed, raceType);
 
   try {
@@ -53,6 +53,20 @@ function processNewRegattaSheets(parsed, raceType) {
     // 7. Schedule Facebook post
     finalizeRaceResultsFile(ctx.parsed, ctx.overallSheetID, roundResult);
 
+    // =========================================================
+    // 8. FINAL TRANSACTION STEP: Archive File & Mark Calendar
+    // =========================================================
+    if (ctx.parsed.eventID) {
+      markCalendarEventProcessed(ctx.parsed.eventID);
+      ctx.log(`Calendar marked PROCESSED for Event: ${ctx.parsed.eventID}`);
+    }
+    
+    if (fileId) {
+      const cfg = getConfig();
+      archiveProcessedFile(fileId, cfg.resultsProcessedFolderId);
+      ctx.log(`Source JSON file successfully archived.`);
+    }
+
     ctx.succeed();
     return "Success";
 
@@ -60,7 +74,7 @@ function processNewRegattaSheets(parsed, raceType) {
     ctx.log(`STACK: ${e.stack}`);
     ctx.fail(e);
     rollbackRoundContext(ctx);
-    throw e; // propagate so doPost reports failure to caller
+    throw e; 
   }
 }
 

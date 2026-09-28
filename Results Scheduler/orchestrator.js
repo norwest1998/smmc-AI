@@ -11,9 +11,11 @@ function checkAndProcessJson() {
     return;
   }
 
-  const parsed = parseSimplifiedRegattaSheet(file.getId());
+  // 1. EXTRACT file ID here
+  const fileId = file.getId();
+  const parsed = parseSimplifiedRegattaSheet(fileId);
 
-  Logger.log("EventID: " + parsed.eventID + " regattaName: " + parsed.regattaName)
+  Logger.log("EventID: " + parsed.eventID + " regattaName: " + parsed.regattaName);
 
   var raceType = 'Scratch';
   const regattaName = (parsed.regattaName || '').trim();
@@ -22,21 +24,13 @@ function checkAndProcessJson() {
     raceType = 'Handicap';
   }
 
-  // 1. Send data to Race Results Automation Web App
-  const result = callResultsWebApp(parsed, raceType);
+  // 2. Pass fileId down to the WebApp
+  const result = callResultsWebApp(parsed, raceType, fileId);
   Logger.log("Result: " + JSON.stringify(result));
 
   if (result && result.status === "success") {
-    // 1. Move file to Archive
-    archiveProcessedFile(file, CONFIG.resultsProcessedFolderId);
-
-    // 2. Mark event as PROCESSED by matching Event ID in Column A
-    if (parsed.eventID) {
-      markCalendarEventProcessed(parsed.eventID);
-    } else {
-      Logger.log('Warning: No A1/eventId property found in JSON file.');
-    }
-
+    // Archiving & Calendar logic removed - now handled safely inside the WebApp!
+    
     // 3. Schedule trigger for the NEXT unprocessed event
     scheduleNextEventTrigger();
 
@@ -48,8 +42,9 @@ function checkAndProcessJson() {
   }
 }
 
-function callResultsWebApp(parsed, raceType) {
-  const payloadObject = { parsed: parsed, raceType: raceType };
+function callResultsWebApp(parsed, raceType, fileId) {
+  // Add fileId to the payload
+  const payloadObject = { parsed: parsed, raceType: raceType, fileId: fileId };
   const options = {
     method: "post",
     contentType: "application/json",
@@ -67,4 +62,3 @@ function callResultsWebApp(parsed, raceType) {
     return { status: "error", message: e.message || e.toString() };
   }
 }
-
