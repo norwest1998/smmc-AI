@@ -140,7 +140,7 @@ function handleGet_(e) {
       .map(key => monthBuckets[key]);
   
     return ContentService
-      .createTextOutput(JSON.stringify({ months: sortedMonths },{ allEvents: allData}))
+      .createTextOutput(JSON.stringify({ months: sortedMonths, allEvents: allData }))
       .setMimeType(ContentService.MimeType.JSON);
   }
 

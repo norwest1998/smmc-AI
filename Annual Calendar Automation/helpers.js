@@ -713,7 +713,7 @@ function json(obj) {
  * Injects a CSS string into an already-built HTML page.
  * Wraps the CSS in <style> tags and inserts it just before </head>
  */
-function injectStyle(html, css) {
+function injectStyle(html, css = '') {
   const styleTag = `<style>${css}</style>`;
   if (html.indexOf('</head>') !== -1) {
     return html.replace('</head>', styleTag + '</head>');
