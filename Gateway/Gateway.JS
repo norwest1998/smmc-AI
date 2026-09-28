@@ -352,7 +352,7 @@ function rowsToObjects(headers, values, skipFirst) {
 // -- Store Average Score request -----------------------
 function appendAverageScoreRequest(action, domain, sheet, rowData) {
   const entry = getRegistryEntry(domain);
-  var ss = SpreadsheetApp.getActiveSpreadsheet(entry.spreadsheetId); 
+  var ss = SpreadsheetApp.openById(entry.spreadsheetId); 
   var sheet = ss.getSheetByName("AvgScrReq");
 
   if (!sheet) {
