@@ -721,7 +721,7 @@ function injectStyle(html, css) {
   return styleTag + html;
 }
 
-function getRegattaEventsList(date, className) {
+function getRegattaEventsList(date) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName("Event Data"); 
 
@@ -731,20 +731,26 @@ function getRegattaEventsList(date, className) {
   // Start from index 1 to skip header row (index 0)
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
+    const fromDate = new Date(date);
+    const toDate = new Date(date);
+    fromDate.setDate(fromDate.getDate() - 3);
+    toDate.setDate(toDate.getDate() + 3);
+    const rowDate = row[2] ? new Date(row[2]) : null;
 
-
-    if (row[2]) {
+if (rowDate && rowDate >= fromDate && rowDate <= toDate){
       events.push({
           id: row[0],
           date: Utilities.formatDate(row[2], ss.getSpreadsheetTimeZone(), 'dd/MM/yyyy'),
           start: formatTime_(row[3]),
           end: formatTime_(row[4]),
-          class: row[6],
+          className: row[6],
           regattaType: row[7],
+          conflict: row[9],
           round: row[11],
           season: row[10],
           status: row[14]
       });
     }
  }
+ return events;
 }

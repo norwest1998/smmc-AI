@@ -17,18 +17,21 @@ function handleGet_(e) {
   const load = e.parameter.load;
   const action = e.parameter.action;
   const sheetName = e.parameter.sheet;
-  const className = e.parameter.class;
   const date = e.parameter.date;
 
-  if (action === "RegattaEvents") {
-    return json({ events: getRegattaEventsList(date, className) });
+  if (action === "listConflicts") {
+    const events = getRegattaEventsList(date);
+    return json({ events: events });
   }
 
   if (action === "fetch") {
     const fetchSheet = ss.getSheetByName(sheetName);
-    if (!fetchSheet) return json({ error: `Sheet not found: ${sheetName}` });
+    if (!fetchSheet) {
+      return json({ error: `Sheet not found: ${sheetName}` });
+    }
+
     const values = fetchSheet.getDataRange().getValues();
-    return json({ values });
+    return json({ values: values });
   }
 
   const title = sheet.getRange('A1').getDisplayValue() || 'Race Day';
@@ -68,7 +71,6 @@ function handleGet_(e) {
   
     const calData = calSheet.getDataRange().getValues();
     const allData = calData;
-    
     const today = new Date();
     const target = new Date(today.getFullYear(), today.getMonth() + 2, 1);
     const threeMonthsOut = new Date(target.getFullYear(), target.getMonth() + 1, 0);
@@ -138,7 +140,7 @@ function handleGet_(e) {
       .map(key => monthBuckets[key]);
   
     return ContentService
-      .createTextOutput(JSON.stringify({ months: sortedMonths },{ allEvents: allData }))
+      .createTextOutput(JSON.stringify({ months: sortedMonths },{ allEvents: allData}))
       .setMimeType(ContentService.MimeType.JSON);
   }
 
