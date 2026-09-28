@@ -131,10 +131,10 @@ Important: Return ONLY the JSON object, no other text.`;
       throw new Error(`Gemini API Error: ${result.error.message}`);
     }
 
-    let extractedText = result.candidates[0].content.parts[0].text;
+    const extractedText = result.candidates[0].content.parts[0].text;
 
     // Clean common JSON wrapper artifacts
-    textContent = extractedText.replace(/^```json\s*|\s*```$/g, '').trim();    
+    const textContent = extractedText.replace(/^```json\s*|\s*```$/g, '').trim();
 
     return JSON.parse(textContent);
     

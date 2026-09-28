@@ -95,16 +95,44 @@ Rules:
     throw new Error("Failed to parse Gemini JSON response: " + e.message);
   }
 
-  // Normalise date if needed
+  // Normalise date if needed. Gemini may return either ISO dates (YYYY-MM-DD)
+  // or local formats such as DD/MM/YYYY. We must preserve the correct day/month/year
+  // ordering for all downstream SMMC processing.
   if (parsed.date && !(parsed.date instanceof Date)) {
-    const dateParts = parsed.date.split(/[-\/]/);
+    const rawDate = String(parsed.date).trim();
+    const dateParts = rawDate.split(/[-\/]/).filter(Boolean);
+
     if (dateParts.length === 3) {
-      // Assume DD/MM/YYYY or MM/DD/YYYY — adjust based on your club's convention
-      const [d, m, y] = dateParts.map(Number);
-      // Most sailing clubs use DD/MM/YYYY
-      parsed.date = new Date(y, m - 1, d);
+      const yearIndex = dateParts.findIndex(part => part.length === 4);
+      let year;
+      let month;
+      let day;
+
+      if (yearIndex === 0) {
+        year = Number(dateParts[0]);
+        month = Number(dateParts[1]);
+        day = Number(dateParts[2]);
+      } else if (yearIndex === 2) {
+        year = Number(dateParts[2]);
+        month = Number(dateParts[1]);
+        day = Number(dateParts[0]);
+      } else if (yearIndex === 1) {
+        year = Number(dateParts[1]);
+        month = Number(dateParts[0]);
+        day = Number(dateParts[2]);
+      } else {
+        // Default to the club convention used across SMMC result sheets.
+        [day, month, year] = dateParts.map(Number);
+      }
+
+      const candidate = new Date(year, month - 1, day);
+      if (!isNaN(candidate.getTime())) {
+        parsed.date = candidate;
+      } else {
+        parsed.date = new Date(rawDate);
+      }
     } else {
-      parsed.date = new Date(parsed.date);
+      parsed.date = new Date(rawDate);
     }
   }
 
