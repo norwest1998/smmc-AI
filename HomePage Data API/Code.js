@@ -54,6 +54,9 @@ var HPAPI_CFG = {
   overallFolderName: 'Overall Results Sheets',
   overallSheetName: 'Overall Results',
 
+  averageReqId: '1FqOMVZnUbTUtruE5QJ_dmscabdMU7BuEHTfjysNuC18',
+  requestsSheetName: 'AvgScrReq',
+
   topFinishers: 8
 };
 
@@ -67,6 +70,7 @@ function doGet(e) {
     if (params.action === 'membersList')      return json_(getMembersList_());
     if (params.action === 'applicationsList') return json_(getApplicationsList_());
     if (params.action === 'boatsList') return json_(getBoatsList());
+    if (params.action === 'reqList') return json_(getRequestList());
 
     // Legacy discovery contract (Championship Standings module)
     if (params.ss) {
@@ -129,6 +133,34 @@ function sanitizeCell_(value) {
   return s.trim();
 }
 
+function getRequestList() {
+  const ss = openSpreadsheet_(HPAPI_CFG.averageReqId);
+  const sheet = ss.getSheetByName(HPAPI_CFG.requestsSheetName);
+  if (!sheet) throw new Error('"AvgScrReq" sheet not found in system.');
+
+  const rows = sheet.getDataRange().getValues();
+  const headers = rows.shift();
+  const idx = h => headers.indexOf(h);
+  const requests = rows
+    .filter(r => r[idx('Request ID')] !== '')
+    .map(r => ({
+      reqId:        r[idx('Request ID')],
+      timestamp:    r[idx('Timestamp')],
+      member:       r[idx('Member Name')],
+      email:        r[idx('Member Email')],
+      eventId:      r[idx('EventID')],
+      date:         r[idx('Date')],
+      className:    r[idx('Class')],
+      regattaType:  r[idx('Regatta Type')],
+      conflict:     r[idx('Conflicting Regatta')],
+      status:       r[idx('Status')],
+      readon:       r[idx('Rejected Reason')],
+      committee:    r[idx('Decision By')],
+      decisionDate: r[idx('Decision Date')],
+      emailSent:    r[idx('Email Sent')]
+    }));
+  return { requests };
+}
 
 
 function getBoatsList() {
@@ -245,7 +277,7 @@ function getApplicationsList_() {
   var lastUpdatedCol  = findHeader_(h, ['laststatusupdated', 'last updated', 'updated']);
   var votesForCol     = findHeader_(h, ['votesfor', 'votes for', 'for']);
   var votesAgainstCol = findHeader_(h, ['votesagainst', 'votes against', 'against']);
-  var approvedCol     = findHeader_(h, ['membership approved', 'membershipapproved', 'membership_approved', 'membership approved?']);,
+  var approvedCol     = findHeader_(h, ['membership approved', 'membershipapproved', 'membership_approved', 'membership approved?']);
   var turnAroundCol   = findHeader_(h, ['turnaround time', 'turnaroundtime', 'turnaround_time', 'turnaround time?']);
 
   var applications = [];
