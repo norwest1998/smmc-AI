@@ -139,41 +139,20 @@ function sanitizeCell_(value) {
   return s.trim();
 }
 
+function safe_(fn) {
+  try { return fn(); } catch (e) { console.error(e); return null; }
+}
+
 function getBootstrapData() {
-  // 1. Read Latest Results instantly from Script Properties (Updated by Results Scheduler)
-  const props = PropertiesService.getScriptProperties();
-  const cachedResultsRaw = props.getProperty('HP_LATEST_RESULTS_CACHE');
-  const latestResults = cachedResultsRaw ? JSON.parse(cachedResultsRaw) : { 
-    ok: false, event: { roundLabel: "-", championship: "Awaiting Data", racedOn: "-" }, results: [] 
+  // One failing sheet must not take down the whole payload; the client skips null sections.
+  return {
+    latestResults: getLatestResults(),          // reads the HP_LATEST_RESULTS_CACHE script property
+    stats:         safe_(getMembershipStats),
+    members:       safe_(function () { return getMembersList_().members; }),
+    boats:         safe_(function () { return getBoatsList().boats; }),
+    applications:  safe_(function () { return getApplicationsList_().applications; }),
+    requests:      safe_(function () { return getRequestList().requests; })
   };
-
-  // 2. Fetch the Next Event HTML (Reuse your existing Web App HTML builder)
-  // Assuming 'handleGet_' with type='display' & load='next' generates the HTML.
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const title = ss.getSheetByName('Web doGet Datasheet').getRange('A1').getDisplayValue() || 'Race Day';
-  let nextEventHtml = "";
-  try {
-    // You can copy the HTML generation logic from handleGet_ here or wrap it.
-    nextEventHtml = generateNextEventHtml(); 
-  } catch (e) {
-    nextEventHtml = "<p>Event details unavailable</p>";
-  }
-
-  // 3. Assemble all datasets sequentially. 
-  // (This takes ~1-2 seconds total on the server, which is much faster than 9 separate client HTTP requests).
-  const payload = {
-    latestResults: latestResults,
-    stats: getMembershipStats(),
-    members: getMembersList_().members,
-    boats: getBoatsList().boats,
-    applications: getApplicationsList_().applications,
-    requests: getRequestList().requests,
-    // Note: To include weather & calendar, you will need to call their respective fetch functions here
-    // weather: getWeatherData(), 
-    // calendar: getAnnualCalendarData()
-  };
-
-  return payload;
 }
 
 function getRequestList() {
