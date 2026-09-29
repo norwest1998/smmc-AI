@@ -57,8 +57,13 @@ var HPAPI_CFG = {
   averageReqId: '1FqOMVZnUbTUtruE5QJ_dmscabdMU7BuEHTfjysNuC18',
   requestsSheetName: 'AvgScrReq',
 
+  weatherId: '1EYuf5wi4Gw-4WP1hdg9sZsOO9tbRx_Z-q5go8BBEOGc',
+  weatherForecastName: 'Weather Forecast',
+  weatherSheetName: 'WZ Daily Forecast',
+
   topFinishers: 8
 };
+const WEATHER_URL = `https://script.google.com/macros/s/AKfycbworw_FnbKehShRIfhbXTuxlAa36jJt8d7MLCvjzAWUfp-_xXORa2ZzC_0m20msa1oj/exec?action=data&callback=renderWeather`;
 
 // =================================== ROUTER ===================================
 
@@ -71,6 +76,7 @@ function doGet(e) {
     if (params.action === 'applicationsList') return json_(getApplicationsList_());
     if (params.action === 'boatsList') return json_(getBoatsList());
     if (params.action === 'reqList') return json_(getRequestList());
+    if (params.action === 'bootstrap') return json_(getBootstrapData());
 
     // Legacy discovery contract (Championship Standings module)
     if (params.ss) {
@@ -131,6 +137,43 @@ function sanitizeCell_(value) {
   try { s = String(value); } catch (err) { s = ''; }
   if (/^cellimage$/i.test(s)) return '';
   return s.trim();
+}
+
+function getBootstrapData() {
+  // 1. Read Latest Results instantly from Script Properties (Updated by Results Scheduler)
+  const props = PropertiesService.getScriptProperties();
+  const cachedResultsRaw = props.getProperty('HP_LATEST_RESULTS_CACHE');
+  const latestResults = cachedResultsRaw ? JSON.parse(cachedResultsRaw) : { 
+    ok: false, event: { roundLabel: "-", championship: "Awaiting Data", racedOn: "-" }, results: [] 
+  };
+
+  // 2. Fetch the Next Event HTML (Reuse your existing Web App HTML builder)
+  // Assuming 'handleGet_' with type='display' & load='next' generates the HTML.
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const title = ss.getSheetByName('Web doGet Datasheet').getRange('A1').getDisplayValue() || 'Race Day';
+  let nextEventHtml = "";
+  try {
+    // You can copy the HTML generation logic from handleGet_ here or wrap it.
+    nextEventHtml = generateNextEventHtml(); 
+  } catch (e) {
+    nextEventHtml = "<p>Event details unavailable</p>";
+  }
+
+  // 3. Assemble all datasets sequentially. 
+  // (This takes ~1-2 seconds total on the server, which is much faster than 9 separate client HTTP requests).
+  const payload = {
+    latestResults: latestResults,
+    stats: getMembershipStats(),
+    members: getMembersList_().members,
+    boats: getBoatsList().boats,
+    applications: getApplicationsList_().applications,
+    requests: getRequestList().requests,
+    // Note: To include weather & calendar, you will need to call their respective fetch functions here
+    // weather: getWeatherData(), 
+    // calendar: getAnnualCalendarData()
+  };
+
+  return payload;
 }
 
 function getRequestList() {
@@ -375,70 +418,19 @@ function serveSheet_(ss, sheetName) {
  * @return {Object} {ok, event:{roundLabel, championship, racedOn}, results:[...]}
  */
 function getLatestResults() {
-  var cal = openSpreadsheet_(HPAPI_CFG.annualCalendarId, HPAPI_CFG.annualCalendarName);
-  var eventSheet = cal.getSheetByName(HPAPI_CFG.eventDataSheet);
-  if (!eventSheet) throw new Error('Sheet "' + HPAPI_CFG.eventDataSheet + '" not found in the Annual Calendar.');
-
-  var values = eventSheet.getDataRange().getValues();
-  if (values.length < 2) throw new Error('Event Data sheet has no events.');
-
-  // Status column: prefer a "Status"-ish header, else column O.
-  var statusCol = findHeader_(values[0], ['status', 'state', 'resultstatus']);
-  if (statusCol === -1) statusCol = HPAPI_CFG.eventDataStatusCol - 1;
-  if (statusCol >= (values[0].length)) statusCol = values[0].length - 1;
-
-  // Bottom-most "Processed" row = latest completed round.
-  var row = null;
-  for (var r = values.length - 1; r >= 1; r--) {
-    if (String(values[r][statusCol]).trim().toLowerCase() === 'processed') { row = values[r]; break; }
+  const props = PropertiesService.getScriptProperties();
+  const cachedData = props.getProperty('HP_LATEST_RESULTS_CACHE');
+  
+  if (cachedData) {
+    return JSON.parse(cachedData);
   }
-  if (!row) throw new Error('No events marked "Processed" were found in Event Data.');
-
-  var raceDate = (row[2] instanceof Date) ? row[2] : new Date(row[2]);
-  var cls = sanitizeCell_(row[6]);    // F Class (may hold an in-cell image)
-  var type = sanitizeCell_(row[7]);   // G Regatta Type
-  var champName = cls + " " + type; // I championship name
-  var tz = Session.getScriptTimeZone();
-
-  // Season lives in SMMC Club Management's named ranges (fallback: calendar).
-  var season = '';
-  try {
-    var club = openSpreadsheet_(HPAPI_CFG.clubManagementId, HPAPI_CFG.clubManagementName);
-    var namedRange = club.getRangeByName('currentSeason');
-    if (namedRange) season = sanitizeCell_(namedRange.getValue());
-  } catch (err) { /* try the calendar below */ }
-  if (!season) {
-    try {
-      var calRange = cal.getRangeByName('currentSeason');
-      if (calRange) season = sanitizeCell_(calRange.getValue());
-    } catch (err) { /* season stays blank */ }
-  }
-
-  var workbook = findOverallWorkbook_(cls, type, season, champName);
-  var round = resolveLastRound_(workbook);
-
-  // Prefer the championship name, then the workbook's series name
-  // ("Overall Results <series> <season>" -> "<series>"), then class/type.
-  var seriesName = champName;
-  if (!seriesName) {
-    seriesName = workbook.getName().replace(/^Overall Results\s*/i, '').trim();
-    if (season) seriesName = seriesName.split(season).join('').trim();
-  }
-  if (!seriesName) seriesName = (cls + ' ' + type).trim();
-  if (!seriesName) seriesName = 'Latest Round';
-
+  
+  // Fallback if the cache is empty (e.g., very first setup)
   return {
-    ok: true,
-    event: {
-      roundLabel: round.label,
-      championship: champName,
-      racedOn: Utilities.formatDate(raceDate, tz, 'd MMM'),
-      className: cls,
-      regattaType: type,
-      season: season
-    },
-    results: round.results.slice(0, HPAPI_CFG.topFinishers),
-    workbook: workbook.getName()
+    ok: false,
+    event: { roundLabel: "-", championship: "Awaiting Results", racedOn: "-" },
+    results: [],
+    workbook: ""
   };
 }
 
@@ -450,6 +442,20 @@ function getLatestResults() {
  * match, so a Class cell holding an in-cell image doesn't break the search.
  */
 function findOverallWorkbook_(cls, type, season, champName) {
+
+  const cacheKey = `WB_ID_${cls}_${type}_${season}`;
+  const props = PropertiesService.getScriptProperties();
+  
+  // 1. Check Cache
+  let cachedId = props.getProperty(cacheKey);
+  if (cachedId) {
+    try { 
+       return SpreadsheetApp.openById(cachedId); 
+    } catch (e) { 
+       props.deleteProperty(cacheKey); // Stale cache
+    }
+  }
+
   var candidates = [];
   if (champName) {
     if (season) candidates.push(('Overall Results ' + champName + ' ' + season).replace(/\s+/g, ' ').trim());
@@ -461,7 +467,6 @@ function findOverallWorkbook_(cls, type, season, champName) {
   }
 
   // 1. Cached property (set by Race Results Automation when it creates workbooks)
-  var props = PropertiesService.getScriptProperties();
   for (var i = 0; i < candidates.length; i++) {
     var cached = props.getProperty('regattaWorkbookId_' + candidates[i]);
     if (cached) {
@@ -479,7 +484,10 @@ function findOverallWorkbook_(cls, type, season, champName) {
       var file = files.next();
       var name = file.getName();
       for (var c = 0; c < candidates.length; c++) {
-        if (name === candidates[c]) return SpreadsheetApp.openById(file.getId());
+        if (name === candidates[c]) {
+          props.setProperty(cacheKey, foundSpreadsheet.getId());
+          return SpreadsheetApp.openById(file.getId());
+        }
       }
       var score = 0, ok = true;
       if (champName && name.indexOf(champName) !== -1) score += 4;
@@ -489,7 +497,11 @@ function findOverallWorkbook_(cls, type, season, champName) {
       if (ok && score > fuzzyScore) { fuzzy = file; fuzzyScore = score; }
     }
   }
-  if (fuzzy && fuzzyScore > 0) return SpreadsheetApp.openById(fuzzy.getId());
+
+  if (fuzzy && fuzzyScore > 0) {
+    props.setProperty(cacheKey, foundSpreadsheet.getId());
+    return SpreadsheetApp.openById(fuzzy.getId());
+  }
 
   // 3. Last resort - search Drive broadly for the class name.
   if (cls) {
@@ -501,6 +513,7 @@ function findOverallWorkbook_(cls, type, season, champName) {
       if (n.indexOf('Overall Results') === 0 &&
           (type === '' || n.toLowerCase().indexOf(type.toLowerCase()) !== -1) &&
           (season === '' || n.indexOf(season) !== -1)) {
+        props.setProperty(cacheKey, foundSpreadsheet.getId());
         return SpreadsheetApp.openById(hit.getId());
       }
     }

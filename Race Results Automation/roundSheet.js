@@ -8,6 +8,7 @@
 function roundWrite(bookID, rankedScores, parsed, raceType) {
   if (!rankedScores || !rankedScores.length) return;
   const ss = SpreadsheetApp.openById(bookID);
+  const workbookName = ss.getName();
 
   const eventID = parsed.eventID;
 
@@ -234,5 +235,56 @@ if (isCorrection) {
               .setValues(archiveRows);
   console.log(`Round ${roundNumber} races processed to Archives (EventID: ${parsed.eventID})`);
 
+const eventData = {
+  date: parsed.date,
+  className: parsed.className,
+  roundNumber: parsed.roundNumber,
+  regattaType: parsed.regattaType
+};
+pushToHomepageCache(eventData, rankedScores, workbookName);
+
+
 return { sheetID, roundNumber };
+}
+
+function pushToHomepageCache(eventData, sortedResults, workbookName) {
+  try {
+    // 1. Format the date (e.g., "24 Aug")
+    const raceDate = new Date(eventData.date);
+    const racedOnStr = Utilities.formatDate(raceDate, Session.getScriptTimeZone(), 'd MMM');
+    
+    // 2. Take only the top 8 finishers to keep the JSON payload tiny and fast
+    // (Assuming sortedResults is already sorted 1st to last)
+    const topFinishers = sortedResults.slice(0, 8).map((r, index) => {
+      return {
+        pos: index + 1, 
+        sailor: r.member, // Map this to whatever variable you use in roundWrite
+        sailNo: r.sail, 
+        points: r.net    // Map to your points variable
+      };
+    });
+
+    // 3. Build the exact JSON structure the homepage expects
+    const payload = {
+      ok: true,
+      event: {
+        roundLabel: "Round " + eventData.roundNumber,
+        championship: eventData.className + " " + eventData.regattaType,
+        racedOn: racedOnStr,
+        className: eventData.className,
+        regattaType: eventData.regattaType,
+        season: eventData.season
+      },
+      results: topFinishers,
+      workbook: workbookName
+    };
+
+    // 4. Save permanently to Script Properties
+    const props = PropertiesService.getScriptProperties();
+    props.setProperty('HP_LATEST_RESULTS_CACHE', JSON.stringify(payload));
+    
+    Logger.log("Homepage cache updated instantly via roundWrite.");
+  } catch (e) {
+    Logger.log("Failed to update Homepage cache: " + e.message);
+  }
 }
