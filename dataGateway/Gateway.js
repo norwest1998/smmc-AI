@@ -58,9 +58,9 @@ const REGISTRY = [
       spreadsheetId: "1nRRzaJ_YBLZKyQbJ0oMQxg5ABRX-ODh3ioh-wVuQJSo",
       defaultSheet: "AuditLog",
       sheets: {
-        AuditLog: {key: "ActionID", headerRow: 1,headers: ["ActionID", "Timestamp", "User", "Action"]},
+        AuditLog: {key: "HexCode", headerRow: 1, headers: ["HexCode", "Timestamp", "User", "Action", "Domain", "Sheet", "Detail", "Old Value", "New Value", "Success"]},
         SchemaRegistry: {key: "Domain", headerRow: 1,headers: ["Domain","Sheet","Columns","Baseline Columns","Row Count","Last Checked","Status"]},
-        VariableRegistry: {key: "Field Name", headerRow: 1,headers: ["Field Name",	"Domain / SpreadsheetId",	"Sheet",	"Key Column",	"Source Column",	"Tag Notation","Last Refreshed"]}
+        VariableRegistry: {key: "Field Name", headerRow: 1,headers: ["Field Name", "Domain / SpreadsheetId", "Sheet", "Key Column", "Source Column", "Tag Notation","Last Refreshed"]}
       }
     }
   },
@@ -85,19 +85,12 @@ const REGISTRY = [
   }
 ];
 
-// --- START OF FILE Gateway.js ---
-// (Keep REGISTRY definition at the top as is)
-// ...
-
 function doGet(e) {
   let action, domain, sheetName, hexKey, filtersArray;
   try {
     const params = e?.parameter || {};
     ({ action, domain, sheet: sheetName, hexKey, filtersArray } = params);
 
-    console.log("doGet Action: " + action + " Domain: " + domain + " Sheet: " + sheetName);
-
-    // 1. Handle Global Actions (No single sheet resolution needed)
     switch (action) {
       case "listFolder":
         return listDriveFolder(params.folderId);
@@ -118,18 +111,21 @@ function doGet(e) {
         const batchReqs = JSON.parse(params.requests);
         const batchResults = {};
         batchReqs.forEach(req => {
-          const bSheet = getSheet(req.domain, req.sheet);
-          const bAllValues = bSheet.getDataRange().getValues();
-          const bConfig = getSheetConfig(req.domain, req.sheet);
-          const bHeaderRow = (bConfig?.headerRow ?? 1) - 1;
-          const bHeaders = bConfig?.headers ?? bAllValues[bHeaderRow].map(h => String(h).trim());
-          const bDataValues = bAllValues.slice(bHeaderRow + 1);
-          batchResults[req.domain + "|" + req.sheet] = rowsToObjects(bHeaders, bDataValues, false);
+          try {
+            const bSheet = getSheet(req.domain, req.sheet);
+            const bAllValues = bSheet.getDataRange().getValues();
+            const bConfig = getSheetConfig(req.domain, req.sheet);
+            const bHeaderRow = (bConfig?.headerRow ?? 1) - 1;
+            const bHeaders = bConfig?.headers ?? bAllValues[bHeaderRow].map(h => String(h).trim());
+            const bDataValues = bAllValues.slice(bHeaderRow + 1);
+            batchResults[req.domain + "|" + req.sheet] = rowsToObjects(bHeaders, bDataValues, false);
+          } catch(err) {
+            batchResults[req.domain + "|" + req.sheet] = [];
+          }
         });
         return json({ results: batchResults });
     }
 
-    // 2. Handle Single-Sheet Actions
     if (!domain) {
       return json({ error: 'Missing required "domain" parameter for this action.' });
     }
@@ -137,16 +133,12 @@ function doGet(e) {
     const sheet       = getSheet(domain, sheetName);
     const allValues   = sheet.getDataRange().getValues();
     const config      = getSheetConfig(domain, sheetName);
-    const headerRow   = (config?.headerRow ?? 1) - 1;          // 0-based index
+    const headerRow   = (config?.headerRow ?? 1) - 1;          
     const regHeaders  = config?.headers ?? null;
     const keyField    = getKeyField(domain, sheetName);
     const headers     = regHeaders ?? allValues[headerRow].map(h => String(h).trim());
-    const dataValues  = allValues.slice(headerRow + 1);         // rows after header
+    const dataValues  = allValues.slice(headerRow + 1);         
     let rows = null;
-
-    if (!sheet) {
-      return json({ error: 'Missing required "sheetName" parameter.' });
-    }
 
     switch (action) {
       case "layout":
@@ -166,7 +158,7 @@ function doGet(e) {
         if (!record) return json({ error: "Record not found" });
         return json({ record });
 
-      case "Search":
+      case "search":
         const results = findResults(domain, sheetName, filtersArray);
         return json({ values: results });
 
@@ -181,18 +173,68 @@ function doGet(e) {
   }
 }
 
-// ... rest of Gateway.js remains exactly the same
-
-// ── doPost ────────────────────────────────────────────────────────
-
-
 function doPost(e) {
   let action, domain, sheetName, hexKey;
   try {
     const body    = JSON.parse(e?.postData?.contents || "{}");
     ({ action, domain, sheet: sheetName, hexKey } = body);
     
-    const updates = body.updates || {};
+    // -------- READ ACTIONS --------
+    if (action === "batchFetch") {
+        const batchReqs = body.requests || [];
+        const batchResults = {};
+        batchReqs.forEach(req => {
+          try {
+            const bSheet = getSheet(req.domain, req.sheet);
+            const bAllValues = bSheet.getDataRange().getValues();
+            const bConfig = getSheetConfig(req.domain, req.sheet);
+            const bHeaderRow = (bConfig?.headerRow ?? 1) - 1;
+            const bHeaders = bConfig?.headers ?? bAllValues[bHeaderRow].map(h => String(h).trim());
+            const bDataValues = bAllValues.slice(bHeaderRow + 1);
+            batchResults[req.domain + "|" + req.sheet] = rowsToObjects(bHeaders, bDataValues, false);
+          } catch(err) {
+            batchResults[req.domain + "|" + req.sheet] = [];
+          }
+        });
+        return json({ results: batchResults });
+    }
+
+    if (["fetch", "display", "search", "layout"].includes(action)) {
+        if (!domain) return json({ error: 'Missing required "domain" parameter.' });
+        if (action === "layout") {
+          const layout = getSheetLayout(domain, sheetName);
+          return json({success: true, domain, sheetName, layout});
+        }
+        if (action === "search") {
+          const results = findResults(domain, sheetName, body.filtersArray);
+          return json({ values: results });
+        }
+
+        const sheet       = getSheet(domain, sheetName);
+        const allValues   = sheet.getDataRange().getValues();
+        const config      = getSheetConfig(domain, sheetName);
+        const headerRow   = (config?.headerRow ?? 1) - 1;
+        const regHeaders  = config?.headers ?? null;
+        const keyField    = getKeyField(domain, sheetName);
+        const headers     = regHeaders ?? allValues[headerRow].map(h => String(h).trim());
+        const dataValues  = allValues.slice(headerRow + 1);
+
+        if (action === "fetch") {
+          const rows = rowsToObjects(headers, dataValues, false);
+          return json({ values: rows });
+        }
+        if (action === "display") {
+          if (!hexKey) return json({ error: "hexKey required for display" });
+          if (!keyField) return json({ error: "No key configured for this sheet" });
+          const rows = rowsToObjects(headers, dataValues, false);
+          const record = rows.find(r => String(r[keyField]).trim() === String(hexKey).trim());
+          if (!record) return json({ error: "Record not found" });
+          return json({ record });
+        }
+    }
+    // -------- END READ ACTIONS --------
+
+    const updates = body.updates || body.update || {};
     const rowData = body.rowData || {};
 
     const sheet       = getSheet(domain, sheetName);
@@ -202,18 +244,18 @@ function doPost(e) {
     const regHeaders  = config?.headers ?? null;
     const keyField    = getKeyField(domain, sheetName);
     const headers     = regHeaders ?? allValues[headerRow].map(h => String(h).trim());
-    const dataRows    = allValues.slice(headerRow + 1);          // rows after header
+    const dataRows    = allValues.slice(headerRow + 1);         // rows after header
     const keyCol      = headers.indexOf(keyField);
-console.log("doPost Action: " + action + " Domain: " + domain + " Sheet: " + sheet);
+
     switch (action) {
-      case"append":
+      case "append":
         const row = headers.map(h => rowData[h] ?? "");
         sheet.appendRow(row);
-        if (!domain === "audit") auditLog("append", domain, sheetName, rowData[keyField] ?? "", "", "", rowData, "Success");
+        if (domain !== "audit") auditLog("append", domain, sheetName, rowData[keyField] ?? "", "", "", rowData, "Success");
         return json({ success: true });
 
       case "update":
-      case "delete" :
+      case "delete":
         if (!keyField) return json({ error: "No key configured for this sheet" });
         if (keyCol === -1) return json({ error: `Key column "${keyField}" not found in headers` });
 
@@ -224,7 +266,7 @@ console.log("doPost Action: " + action + " Domain: " + domain + " Sheet: " + she
         if (action === "delete") {
           const before = Object.fromEntries(headers.map((h, i) => [h, dataRows[dataRowIndex][i]]));
           sheet.deleteRow(sheetRowNumber);
-          if (!domain === "audit") auditLog("delete", domain, sheetName, hexKey, "", before, "", "Success");
+          if (domain !== "audit") auditLog("delete", domain, sheetName, hexKey, "", before, "", "Success");
           return json({ success: true });
         } 
 
@@ -238,11 +280,12 @@ console.log("doPost Action: " + action + " Domain: " + domain + " Sheet: " + she
 
           if (isValueChanged(before, value)) {
             sheet.getRange(sheetRowNumber, col + 1).setValue(value);
-            if (!domain === "audit") auditLog("update", domain, sheetName, hexKey, field, before, value, "Success");
+            if (domain !== "audit") auditLog("update", domain, sheetName, hexKey, field, before, value, "Success");
             updatedCount++;
           }
         });
         return json({ success: true, updatedCount });
+
       case "registerSchema":
         return json(upsertSchemaRegistry(body));
 
@@ -253,11 +296,11 @@ console.log("doPost Action: " + action + " Domain: " + domain + " Sheet: " + she
         return appendAverageScoreRequest(action, domain, sheet, rowData);
         
       default:   
-        auditLog(action, domain, sheetName, hexKey, "", "Unknown action" + action, "", "Failed");
+        auditLog(action, domain, sheetName, hexKey, "", "Unknown action " + action, "", "Failed");
         return json({ error: `Unknown action: ${action}` });
     }
   } catch(err) {
-    auditLog(action, domain, sheetName, hexKey, "",err.message, "",  "Failed");
+    auditLog(action, domain, sheetName, hexKey, "", err.message, "",  "Failed");
     return json({ error: err.message });
   }
 }
@@ -294,8 +337,6 @@ function getRegistryHeaders(domain, sheetName) {
 
 // ── Layout Scraper ───────────────────────────────────────────────────
 function getSheetLayout(domain, sheetName) {
-  // If your domains map to different Spreadsheet IDs, map them here:
-  // const ss = getSpreadsheetForDomain(domain);
   const entry = getRegistryEntry(domain);
   const ss = entry.spreadsheetId;
   const sheet = ss.getSheetByName(sheetName);
@@ -309,10 +350,7 @@ function getSheetLayout(domain, sheetName) {
     return [];
   }
 
-  // Fetch the first row (column headers)
   const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
-
-  // Return non-empty string headers
   return headers.map(String).map(h => h.trim()).filter(Boolean);
 }
 
@@ -321,7 +359,6 @@ function getSheetLayout(domain, sheetName) {
 function isValueChanged(before, after) {
   if (before === after) return false;
 
-  // Handle Apps Script Date objects from getValues()
   if (before instanceof Date) {
     const afterDate = new Date(after);
     if (!isNaN(afterDate.getTime())) {
@@ -329,7 +366,6 @@ function isValueChanged(before, after) {
     }
   }
 
-  // Normalize string comparisons to ignore type mismatches like 10 vs "10" or empty string vs null
   const strBefore = (before === null || before === undefined) ? "" : String(before).trim();
   const strAfter  = (after === null || after === undefined)   ? "" : String(after).trim();
 
@@ -337,7 +373,7 @@ function isValueChanged(before, after) {
 }
 
 // ── Audit Log ─────────────────────────────────────────────────────
-// Log all updates, deletes and appends...
+
 function auditLog(action, domain, sheetName, recordId, field, before, after, success) {
   try {
     const sh      = getSheet("audit", "AuditLog");
@@ -361,14 +397,10 @@ function auditLog(action, domain, sheetName, recordId, field, before, after, suc
   }
 }
 
-// ── Response Helper ───────────────────────────────────────────────
-
 function json(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
 }
-
-// ── Row Mapping ───────────────────────────────────────────────────
 
 function rowsToObjects(headers, values, skipFirst) {
   return (skipFirst ? values.slice(1) : values)
@@ -380,15 +412,14 @@ function rowsToObjects(headers, values, skipFirst) {
 function appendAverageScoreRequest(action, domain, sheet, rowData) {
   const entry = getRegistryEntry(domain);
   var ss = SpreadsheetApp.openById(entry.spreadsheetId); 
-  var sheet = ss.getSheetByName("AvgScrReq");
+  var avgSheet = ss.getSheetByName("AvgScrReq");
 
-  if (!sheet) {
+  if (!avgSheet) {
     return ContentService.createTextOutput(JSON.stringify({
       status: "error",
       message: "Sheet tab 'AvgScrReq' not found in spreadsheet."
     })).setMimeType(ContentService.MimeType.JSON);
   }
-  // Map payload fields to spreadsheet column layout
   var newRow = [
     rowData.requestId || "",
     rowData.timestamp || new Date().toISOString(),
@@ -405,13 +436,13 @@ function appendAverageScoreRequest(action, domain, sheet, rowData) {
     ""  // Rejected Reason
   ];
 
-  sheet.appendRow(newRow);
-  auditLog("append", domain, sheet, payload.requestId, `${action} by ${rowData.memberName}`, "", rowData, "Success");
+  avgSheet.appendRow(newRow);
+  auditLog("append", domain, "AvgScrReq", rowData.requestId, `${action} by ${rowData.memberName}`, "", rowData, "Success");
 
   return ContentService.createTextOutput(JSON.stringify({
     status: "success",
     message: "Request successfully created.",
-    requestId: payload.requestId
+    requestId: rowData.requestId
   })).setMimeType(ContentService.MimeType.JSON);
 
 }
@@ -431,7 +462,6 @@ function buildDynamicRegistryFromSheet() {
   const sheetIdx = headers.indexOf("sheet");
   const colsIdx = headers.indexOf("columns");
 
-  // Domain ID mapping for server-side openById calls
   const DOMAIN_IDS = {
     members: "1nFqeV1U0c_RLaZK4amf7QR1MMwB9q8gZLc4HriUH9iI",
     documents: "1gE486zRLghLbnDXvY8duUcYuCyHoi9Jf1XwmrkT3sRs",
@@ -480,11 +510,6 @@ function buildDynamicRegistryFromSheet() {
 
 }
 
-// ------------------------------------------------------------
-// SHEET SETUP
-// Run once manually (or via an onOpen menu) to create the sheet
-// with the correct headers if it doesn't exist.
-// ------------------------------------------------------------
 function setupSchemaRegistry() {
   const REGISTRY_SHEET = "SchemaRegistry";
   const HEADERS = [
@@ -503,11 +528,6 @@ function setupSchemaRegistry() {
   return sheet;
 }
 
-// ------------------------------------------------------------
-// Shema Monitoring
-// UPSERT  — called by the web-app doPost handler
-// payload: { domain, sheet, columns: string[], rowCount: number }
-// ------------------------------------------------------------
 function upsertSchemaRegistry(payload) {
   const sheet     = setupSchemaRegistry();
   const domain    = (payload.domain  || "").toLowerCase();
@@ -517,10 +537,9 @@ function upsertSchemaRegistry(payload) {
   const now       = new Date().toISOString();
 
   const data = sheet.getDataRange().getValues();
-  // Row 0 is headers; find existing entry by domain+sheet
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === domain && data[i][1] === sheetName) {
-      const baseline = data[i][3] || cols;          // keep original baseline
+      const baseline = data[i][3] || cols;          
       const current  = data[i][2];
       const status   = (current && current !== cols) ? "DRIFT" : "OK";
 
@@ -531,7 +550,6 @@ function upsertSchemaRegistry(payload) {
     }
   }
 
-  // New entry — baseline = first snapshot
   sheet.appendRow([domain, sheetName, cols, cols, rowCount, now, "OK"]);
   return { ok: true, status: "OK" };
 }
@@ -542,8 +560,8 @@ function resetSchemaBaseline(domain, sheetName) {
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === domain && data[i][1] === sheetName) {
       const current = data[i][2];
-      regSheet.getRange(i + 1, 4).setValue(current); // Baseline Columns
-      regSheet.getRange(i + 1, 7).setValue("OK");    // Status
+      regSheet.getRange(i + 1, 4).setValue(current); 
+      regSheet.getRange(i + 1, 7).setValue("OK");    
       return { ok: true };
     }
   }
@@ -551,7 +569,6 @@ function resetSchemaBaseline(domain, sheetName) {
 }
 
 function findResults(domain, sheetName, filtersArray) {
-  // 1. Fetch sheet configuration from registry
   const sheetConfig = getSheetConfig(domain, sheetName);
   if (!sheetConfig) {
     throw new Error(`Configuration not found for domain: ${domain}, sheet: ${sheetName}`);
@@ -561,37 +578,37 @@ function findResults(domain, sheetName, filtersArray) {
   const sheet = getSheet(domain, activeSheetName);
   const data = sheet.getDataRange().getValues();
 
-  const headerIndex = sheetConfig.headerRow - 1;
+  const headerIndex = (sheetConfig.headerRow || 1) - 1;
   const rawHeaders = data[headerIndex];
   if (!rawHeaders) {
     throw new Error(`Header row at index ${sheetConfig.headerRow} could not be found in the sheet.`);
-    }
+  }
 
   const headers = rawHeaders.map(h => String(h).trim().toLowerCase());
-  const rows = data.slice(sheetConfig.headerRow);
+  const rows = data.slice(headerIndex + 1);
 
-  const filters = {};filtersArray.forEach(f => {filters[f.key.toLowerCase()] = f.value;});
-  const filteredRows = rows.filter(
-    row => {
-      return Object.entries(filters).every(
-        ([filterKey, filterValue]) => {
-        const columnIndex = headers.indexOf(filterKey);
-        // If the column doesn't exist in the sheet, skip filtering on it
-        if (columnIndex === -1) return false;
-        // Exact check against the cell content
-        return row[columnIndex] === filterValue;
-        }
-      );
+  const filters = {};
+  if (filtersArray) {
+    let parsedFilters = filtersArray;
+    if (typeof filtersArray === 'string') {
+        try { parsedFilters = JSON.parse(filtersArray); } catch(e) {}
     }
-  );
+    if (Array.isArray(parsedFilters)) {
+        parsedFilters.forEach(f => { filters[f.key.toLowerCase()] = f.value; });
+    }
+  }
 
-  return [rawHeaders, ...filteredRows];
+  const filteredRows = rows.filter(row => {
+      return Object.entries(filters).every(([filterKey, filterValue]) => {
+        const columnIndex = headers.indexOf(filterKey);
+        if (columnIndex === -1) return false;
+        return String(row[columnIndex]) === String(filterValue);
+      });
+  });
+
+  return rowsToObjects(rawHeaders.map(h => String(h).trim()), filteredRows, false);
 }
 
-/**
- * Runs a complete health check comparing live Google Sheets against REGISTRY.
- * Updates SchemaRegistry sheet and flags DRIFT or OK status.
- */
 function validateRegistryAgainstLiveSheets() {
   const entry = getRegistryEntry("audit");
   const ss = SpreadsheetApp.openById(entry.spreadsheetId);
@@ -601,7 +618,6 @@ function validateRegistryAgainstLiveSheets() {
   const now = new Date().toISOString();
   const results = [];
 
-  // Iterate over each domain in REGISTRY
   REGISTRY.forEach(domainObj => {
     const domainKey = Object.keys(domainObj)[0];
     const domainInfo = domainObj[domainKey];
@@ -623,7 +639,6 @@ function validateRegistryAgainstLiveSheets() {
         return;
       }
 
-      // Read actual column headers from headerRow
       const headerRowIndex = sheetConfig.headerRow || 1;
       const lastCol = gSheet.getLastColumn();
       const lastRow = gSheet.getLastRow();
@@ -652,7 +667,6 @@ function validateRegistryAgainstLiveSheets() {
     });
   });
 
-  // Overwrite SchemaRegistry with fresh baseline audit
   const headers = ["Domain", "Sheet", "Columns", "Baseline Columns", "Row Count", "Last Checked", "Status"];
   auditSheet.clear();
   auditSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -661,52 +675,31 @@ function validateRegistryAgainstLiveSheets() {
     auditSheet.getRange(2, 1, results.length, headers.length).setValues(results);
   }
 
-  // Auto-refresh VariableRegistry if any drift was found
   generateVariableRegistry();
-  
   Logger.log(`Validation complete. Processed ${results.length} sheets.`);
 }
 
-/**
- * Automatically populates/refreshes the 'VariableRegistry' sheet from 'SchemaRegistry'.
- * Maps registered sheet columns to ${field-name} substitution tags.
- */
 function generateVariableRegistry() {
   const entry = getRegistryEntry("audit");
   const ss = SpreadsheetApp.openById(entry.spreadsheetId);
   let sheet = ss.getSheetByName("VariableRegistry");
 
-  
-  // 1. Fetch data from SchemaRegistry
   const schemaSheet = ss.getSheetByName('SchemaRegistry');
-  if (!schemaSheet) {
-    throw new Error("Sheet 'SchemaRegistry' not found in active spreadsheet.");
-  }
+  if (!schemaSheet) throw new Error("Sheet 'SchemaRegistry' not found in active spreadsheet.");
   
   const data = schemaSheet.getDataRange().getValues();
-  if (data.length <= 1) {
-    Logger.log("No data found in SchemaRegistry.");
-    return;
-  }
+  if (data.length <= 1) return;
   
-  // Map headers to indexes
   const headers = data[0].map(h => String(h).trim());
   const domainIdx = headers.indexOf('Domain');
   const sheetIdx = headers.indexOf('Sheet');
   const colsIdx = headers.indexOf('Columns');
   const statusIdx = headers.indexOf('Status');
 
-  if (domainIdx === -1 || sheetIdx === -1 || colsIdx === -1) {
-    throw new Error("SchemaRegistry must contain 'Domain', 'Sheet', and 'Columns' headers.");
-  }
-
-  // Candidate names used to automatically identify primary key columns
   const keyCandidates = ['RowID', 'ID', 'HexKey', 'Key', 'Batch Key', 'ActionID', 'NoteID', 'BoatID', 'TopicID'];
-
   const registryRows = [];
   const timestamp = new Date();
 
-  // 2. Process each registered sheet entry
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const domain = String(row[domainIdx] || '').trim();
@@ -714,10 +707,8 @@ function generateVariableRegistry() {
     const colsRaw = String(row[colsIdx] || '').trim();
     const status = statusIdx !== -1 ? String(row[statusIdx] || '').trim() : 'OK';
 
-    // Skip empty or failing rows
     if (!domain || !sheetName || !colsRaw || status === 'ERROR') continue;
 
-    // Parse column array (handles both JSON strings and comma-separated text)
     let columns = [];
     try {
       columns = JSON.parse(colsRaw);
@@ -727,33 +718,20 @@ function generateVariableRegistry() {
 
     if (!Array.isArray(columns) || columns.length === 0) continue;
 
-    // Infer primary key column
     let keyColumn = columns.find(col => keyCandidates.includes(col.trim()));
-    if (!keyColumn) {
-      // Fallback: match any column containing 'id' or 'key', otherwise default to first column
-      keyColumn = columns.find(col => /id|key/i.test(col.trim())) || columns[0];
-    }
+    if (!keyColumn) keyColumn = columns.find(col => /id|key/i.test(col.trim())) || columns[0];
 
-    // 3. Map each column header into a substitution variable tag
     columns.forEach(colName => {
       const cleanCol = String(colName).trim();
       if (!cleanCol) return;
 
       const fieldTag = slugifyFieldName(cleanCol);
-
       registryRows.push([
-        fieldTag,                // e.g. "first-name"
-        domain,                  // e.g. "apps"
-        sheetName,               // e.g. "Membership Applications"
-        keyColumn,               // e.g. "RowID"
-        cleanCol,                // e.g. "First name"
-        `${domain}.${fieldTag}`, // Global scoped tag: e.g. "apps.first-name"
-        timestamp
+        fieldTag, domain, sheetName, keyColumn, cleanCol, `${domain}.${fieldTag}`, timestamp
       ]);
     });
   }
 
-  // 4. Create or clear the target 'VariableRegistry' sheet
   let varSheet = ss.getSheetByName('VariableRegistry');
   if (!varSheet) {
     varSheet = ss.insertSheet('VariableRegistry');
@@ -761,57 +739,23 @@ function generateVariableRegistry() {
     varSheet.clear();
   }
 
-  // 5. Output header and populated variable rows
-  const outputHeaders = [
-    'Field Name', 
-    'Domain / SpreadsheetId', 
-    'Sheet', 
-    'Key Column', 
-    'Source Column', 
-    'Tag Notation', 
-    'Last Refreshed'
-  ];
-
+  const outputHeaders = ['Field Name', 'Domain / SpreadsheetId', 'Sheet', 'Key Column', 'Source Column', 'Tag Notation', 'Last Refreshed'];
   const fullData = [outputHeaders, ...registryRows];
   varSheet.getRange(1, 1, fullData.length, outputHeaders.length).setValues(fullData);
-
-  // 6. Apply header styling and column auto-resizing
   formatVariableRegistrySheet(varSheet, fullData.length, outputHeaders.length);
-
-  Logger.log(`Successfully generated ${registryRows.length} variable tags in 'VariableRegistry'.`);
 }
 
-/**
- * Converts source column headers into clean, slugified substitution tags.
- * Examples:
- *   "First name"               -> "first-name"
- *   "Emergency Contact Number" -> "emergency-contact-number"
- *   "Turnaround \nTime"        -> "turnaround-time"
- */
 function slugifyFieldName(name) {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '') // strip special characters
-    .trim()
-    .replace(/[\s_]+/g, '-');     // replace spaces/underscores with hyphens
+  return name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/[\s_]+/g, '-');
 }
 
-/**
- * Applies header formatting, frozen rows, and column auto-sizing.
- */
 function formatVariableRegistrySheet(sheet, totalRows, totalCols) {
   const headerRange = sheet.getRange(1, 1, 1, totalCols);
-  headerRange.setBackground('#1f2937')
-             .setFontColor('#ffffff')
-             .setFontWeight('bold');
-
+  headerRange.setBackground('#1f2937').setFontColor('#ffffff').setFontWeight('bold');
   sheet.setFrozenRows(1);
-
   if (totalRows > 1) {
-    // Format timestamp column
     sheet.getRange(2, 7, totalRows - 1, 1).setNumberFormat('yyyy-mm-dd hh:mm:ss');
   }
-
   for (let c = 1; c <= totalCols; c++) {
     sheet.autoResizeColumn(c);
   }
