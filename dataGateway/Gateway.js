@@ -85,12 +85,55 @@ const REGISTRY = [
   }
 ];
 
+// --- START OF FILE Gateway.js ---
+// (Keep REGISTRY definition at the top as is)
+// ...
+
 function doGet(e) {
   let action, domain, sheetName, hexKey, filtersArray;
   try {
     const params = e?.parameter || {};
     ({ action, domain, sheet: sheetName, hexKey, filtersArray } = params);
-    let rows = null;
+
+    console.log("doGet Action: " + action + " Domain: " + domain + " Sheet: " + sheetName);
+
+    // 1. Handle Global Actions (No single sheet resolution needed)
+    switch (action) {
+      case "listFolder":
+        return listDriveFolder(params.folderId);
+      case "readFile":
+        return readDriveFile(params.fileId);
+      case "getRegistry":
+        try {
+          return ContentService.createTextOutput(JSON.stringify({ registry: buildDynamicRegistryFromSheet() }))
+            .setMimeType(ContentService.MimeType.JSON);
+        } catch (err) {
+          return ContentService.createTextOutput(JSON.stringify({ error: err.toString() }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+      case "triggerProcessing":
+        return triggerResultsScheduler();
+      case "batchFetch":
+        if (!params.requests) return json({ error: "Missing 'requests' parameter" });
+        const batchReqs = JSON.parse(params.requests);
+        const batchResults = {};
+        batchReqs.forEach(req => {
+          const bSheet = getSheet(req.domain, req.sheet);
+          const bAllValues = bSheet.getDataRange().getValues();
+          const bConfig = getSheetConfig(req.domain, req.sheet);
+          const bHeaderRow = (bConfig?.headerRow ?? 1) - 1;
+          const bHeaders = bConfig?.headers ?? bAllValues[bHeaderRow].map(h => String(h).trim());
+          const bDataValues = bAllValues.slice(bHeaderRow + 1);
+          batchResults[req.domain + "|" + req.sheet] = rowsToObjects(bHeaders, bDataValues, false);
+        });
+        return json({ results: batchResults });
+    }
+
+    // 2. Handle Single-Sheet Actions
+    if (!domain) {
+      return json({ error: 'Missing required "domain" parameter for this action.' });
+    }
+
     const sheet       = getSheet(domain, sheetName);
     const allValues   = sheet.getDataRange().getValues();
     const config      = getSheetConfig(domain, sheetName);
@@ -99,15 +142,16 @@ function doGet(e) {
     const keyField    = getKeyField(domain, sheetName);
     const headers     = regHeaders ?? allValues[headerRow].map(h => String(h).trim());
     const dataValues  = allValues.slice(headerRow + 1);         // rows after header
-console.log("doGet Action: " + action + " Domain: " + domain + " Sheet: " + sheet);
+    let rows = null;
+
     if (!sheet) {
       return json({ error: 'Missing required "sheetName" parameter.' });
-     }
+    }
 
     switch (action) {
       case "layout":
-        const layout = getSheetLayout(domain, sheet);
-        return json({success: true, domain: domain, sheetName: sheet, layout: layout});
+        const layout = getSheetLayout(domain, sheetName);
+        return json({success: true, domain: domain, sheetName: sheetName, layout: layout});
 
       case "fetch": 
         rows = rowsToObjects(headers, dataValues, false);
@@ -123,27 +167,8 @@ console.log("doGet Action: " + action + " Domain: " + domain + " Sheet: " + shee
         return json({ record });
 
       case "Search":
-        results = findResults(domain, sheet, filtersArray);
+        const results = findResults(domain, sheetName, filtersArray);
         return json({ values: results });
-
-      case "listFolder":
-        return listDriveFolder(params.folderId);
-
-      case "readFile":
-        return readDriveFile(params.fileId);
-      
-      case "getRegistry":
-        try {
-          const registry = buildDynamicRegistryFromSheet();
-          return ContentService.createTextOutput(JSON.stringify({ registry: registry }))
-            .setMimeType(ContentService.MimeType.JSON);
-        } catch (err) {
-          return ContentService.createTextOutput(JSON.stringify({ error: err.toString() }))
-            .setMimeType(ContentService.MimeType.JSON);
-        }
-  
-      case "triggerProcessing":
-        return triggerResultsScheduler();
 
       default:
         auditLog(action, domain, sheetName, hexKey, "", "Unknown action: " + action, "", "Failed");
@@ -151,10 +176,12 @@ console.log("doGet Action: " + action + " Domain: " + domain + " Sheet: " + shee
     } 
 
   } catch(err) {
-    auditLog(action, domain, sheetName, hexKey, "",err.message, "", "Failed");
+    auditLog(action, domain, sheetName, hexKey, "", err.message, "", "Failed");
     return json({ error: err.message });
   }
 }
+
+// ... rest of Gateway.js remains exactly the same
 
 // ── doPost ────────────────────────────────────────────────────────
 
