@@ -397,19 +397,77 @@ function serveSheet_(ss, sheetName) {
  * @return {Object} {ok, event:{roundLabel, championship, racedOn}, results:[...]}
  */
 function getLatestResults() {
-  const props = PropertiesService.getScriptProperties();
-  const cachedData = props.getProperty('HP_LATEST_RESULTS_CACHE');
-  
-  if (cachedData) {
-    return JSON.parse(cachedData);
+  var props = PropertiesService.getScriptProperties();
+  var raw = props.getProperty('HP_LATEST_RESULTS_CACHE');
+  if (raw) {
+    try { var cached = JSON.parse(raw); if (cached && cached.ok) return cached; } catch (e) { /* fall through */ }
   }
-  
-  // Fallback if the cache is empty (e.g., very first setup)
+
+  // Fallback: nothing usable in Script Properties, so build it live (short-lived cache, never overwrites the property)
+  var sc = CacheService.getScriptCache();
+  var hit = sc.get('HP_LATEST_RESULTS_FALLBACK');
+  if (hit) return JSON.parse(hit);
+
+  try {
+    var built = buildLatestResults_();
+    sc.put('HP_LATEST_RESULTS_FALLBACK', JSON.stringify(built), 1800);
+    return built;
+  } catch (err) {
+    console.error('Latest results fallback failed: ' + err);
+    return {
+      ok: false,
+      event: { roundLabel: "-", championship: "Awaiting Results", racedOn: "-" },
+      results: [],
+      workbook: "",
+      error: String((err && err.message) || err)
+    };
+  }
+}
+
+/**
+ * Live build: most recent "Processed" event in Event Data -> its Overall Results
+ * workbook -> last round -> top finishers.
+ */
+function buildLatestResults_() {
+  var ss = openSpreadsheet_(HPAPI_CFG.annualCalendarId, HPAPI_CFG.annualCalendarName);
+  var sheet = ss.getSheetByName(HPAPI_CFG.eventDataSheet);
+  if (!sheet) throw new Error('"' + HPAPI_CFG.eventDataSheet + '" sheet not found.');
+
+  var values = sheet.getDataRange().getValues();
+  var statusCol = findHeader_(values[0], ['status']);
+  if (statusCol === -1) statusCol = HPAPI_CFG.eventDataStatusCol - 1;
+
+  var tz = Session.getScriptTimeZone();
+  var now = new Date();
+  var best = null;
+  for (var r = 1; r < values.length; r++) {
+    var row = values[r];
+    if (String(row[statusCol]).trim().toLowerCase() !== 'processed') continue;
+    var d = row[2] instanceof Date ? row[2] : new Date(row[2]);   // Col C
+    if (isNaN(d) || d > now) continue;
+    if (!best || d > best.date) best = { date: d, row: row };
+  }
+  if (!best) throw new Error('No processed events found.');
+
+  var cls = String(best.row[6] || '').trim();          // Col G
+  var type = String(best.row[7] || '').trim();         // Col H
+  var champ = String(best.row[8] || '').trim();        // Col I
+  var season = String(best.row[10] || '').trim() || (typeof deriveSeason_ === 'function' ? deriveSeason_(best.date) : String(best.date.getFullYear()));  // Col K
+
+  var wb = findOverallWorkbook_(cls, type, season, champ);
+  var round = resolveLastRound_(wb);
+
   return {
-    ok: false,
-    event: { roundLabel: "-", championship: "Awaiting Results", racedOn: "-" },
-    results: [],
-    workbook: ""
+    ok: true,
+    event: {
+      roundLabel: round.label,
+      championship: champ || (cls + ' ' + type).trim(),
+      className: cls,
+      boatClass: cls,
+      racedOn: Utilities.formatDate(best.date, tz, 'd MMM yyyy')
+    },
+    results: round.results.slice(0, HPAPI_CFG.topFinishers),
+    workbook: wb.getName()
   };
 }
 
@@ -464,7 +522,7 @@ function findOverallWorkbook_(cls, type, season, champName) {
       var name = file.getName();
       for (var c = 0; c < candidates.length; c++) {
         if (name === candidates[c]) {
-          props.setProperty(cacheKey, foundSpreadsheet.getId());
+          props.setProperty(cacheKey, file.getId());
           return SpreadsheetApp.openById(file.getId());
         }
       }
@@ -478,7 +536,7 @@ function findOverallWorkbook_(cls, type, season, champName) {
   }
 
   if (fuzzy && fuzzyScore > 0) {
-    props.setProperty(cacheKey, foundSpreadsheet.getId());
+    props.setProperty(cacheKey, fuzzy.getId());
     return SpreadsheetApp.openById(fuzzy.getId());
   }
 
@@ -492,7 +550,7 @@ function findOverallWorkbook_(cls, type, season, champName) {
       if (n.indexOf('Overall Results') === 0 &&
           (type === '' || n.toLowerCase().indexOf(type.toLowerCase()) !== -1) &&
           (season === '' || n.indexOf(season) !== -1)) {
-        props.setProperty(cacheKey, foundSpreadsheet.getId());
+        props.setProperty(cacheKey, hit.getId());
         return SpreadsheetApp.openById(hit.getId());
       }
     }
