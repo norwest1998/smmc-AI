@@ -82,6 +82,15 @@ const REGISTRY = [
         AvgScrReq: {key: "Request ID", headerRow: 1,headers: ["Request ID","Timestamp","Member Name","Member Email","EventID","Date","Class","Regatta Type","Conflicting Regatta","Status","Rejected Reason","Decision By","Decision Date","Email Sent"]}
       }
     }
+  },
+  {
+    results: {
+      spreadsheetId: "1C7n5b1RZ1YCoQ3HHbZQ-UerJLbSfnZ_VYJnQ_CKr-XQ",
+      defaultSheet: "GuestRegistrations",
+      sheets: {
+        AvgScrReq: {key: "EventID", headerRow: 1,headers: ["HexKey", "EventID", "EventTitle", "EventDate", "RaceClass", "SailNo", "CompetitorName", "HomeClub", "ContactEmail", "RegisteredAt", "Status"]}
+      }
+    }
   }
 ];
 
@@ -305,6 +314,11 @@ function doPost(e) {
   }
 }
 
+function json(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 // ── Registry Helpers ──────────────────────────────────────────────
 
 function getRegistryEntry(domain) {
@@ -395,11 +409,6 @@ function auditLog(action, domain, sheetName, recordId, field, before, after, suc
   } catch(e) {
     console.error("AuditLog failed:", e.message);
   }
-}
-
-function json(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function rowsToObjects(headers, values, skipFirst) {
