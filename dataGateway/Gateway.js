@@ -464,28 +464,25 @@ function buildDynamicRegistryFromSheet() {
   if (!schemaSheet) throw new Error("SchemaRegistry sheet not found.");
 
   const data = schemaSheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
+  
+  // Use existing config to dynamically find the header row index (1-based to 0-based array index)
+  const schemaConfig = getSheetConfig("audit", "SchemaRegistry");
+  const headerRowIdx = (schemaConfig?.headerRow ?? 1) - 1;
 
-  const headers = data[0].map(h => String(h).trim().toLowerCase());
+  // Prevent crashing if the sheet is effectively empty
+  if (data.length <= headerRowIdx + 1) return [];
+
+  // Parse headers from the correct dynamic row
+  const headers = data[headerRowIdx].map(h => String(h).trim().toLowerCase());
   const domainIdx = headers.indexOf("domain");
   const sheetIdx = headers.indexOf("sheet");
   const colsIdx = headers.indexOf("columns");
 
-  const DOMAIN_IDS = {
-    members: "1nFqeV1U0c_RLaZK4amf7QR1MMwB9q8gZLc4HriUH9iI",
-    documents: "1gE486zRLghLbnDXvY8duUcYuCyHoi9Jf1XwmrkT3sRs",
-    calendar: "1AVopdio8GLzwYGQjiX7qiVBXWQVpmArmaGBLWYTHxrM",
-    apps: "1N9SFZ65rx7EA6XDBh7FUEmI504r_1aF3NYUVOg8g8Xk",
-    notes: "1s9zOeaGiWEshpgWYJO_5VaF1OggvnM_b2mRVsotxcbs",
-    audit: "1nRRzaJ_YBLZKyQbJ0oMQxg5ABRX-ODh3ioh-wVuQJSo",
-    tracking: "1T9Hojn4zW7C-2UXg8O8OYKcq_BRYqCHsgU2n3S1IW8o",
-    results: "1AVopdio8GLzwYGQjiX7qiVBXWQVpmArmaGBLWYTHxrM"
-  };
-
   const keyCandidates = ['RowID', 'ID', 'HexKey', 'Key', 'Batch Key', 'ActionID', 'NoteID', 'BoatID', 'TopicID', 'HexCode', 'Request ID'];
   const domainMap = {};
 
-  for (let i = 1; i < data.length; i++) {
+  // Start looping directly after the header row
+  for (let i = headerRowIdx + 1; i < data.length; i++) {
     const domain = String(data[i][domainIdx] || '').trim().toLowerCase();
     const sheetName = String(data[i][sheetIdx] || '').trim();
     const colsRaw = String(data[i][colsIdx] || '').trim();
@@ -496,8 +493,11 @@ function buildDynamicRegistryFromSheet() {
     try { columns = JSON.parse(colsRaw); } catch (e) { columns = colsRaw.split(',').map(c => c.trim()); }
 
     if (!domainMap[domain]) {
+      // Lookup the spreadsheetId dynamically from the global REGISTRY constant
+      const existingDomainInfo = REGISTRY.find(r => r[domain])?.[domain];
+      
       domainMap[domain] = {
-        spreadsheetId: DOMAIN_IDS[domain] || "",
+        spreadsheetId: existingDomainInfo ? existingDomainInfo.spreadsheetId : "",
         defaultSheet: sheetName,
         sheets: {}
       };
@@ -507,16 +507,19 @@ function buildDynamicRegistryFromSheet() {
                  columns.find(c => /id|key/i.test(c.trim())) ||
                  columns[0];
 
+    // Maintain existing sheet overrides from REGISTRY if they exist (like non-standard headerRows)
+    const existingSheetInfo = REGISTRY.find(r => r[domain])?.[domain]?.sheets?.[sheetName];
+
     domainMap[domain].sheets[sheetName] = {
       headers: columns,
       key: keyCol,
-      headerRow: 1
+      headerRow: existingSheetInfo?.headerRow ?? 1
     };
   }
+  
   return Object.keys(domainMap).map(domainKey => ({
       [domainKey]: domainMap[domainKey]
-    }));
-
+  }));
 }
 
 function setupSchemaRegistry() {
