@@ -99,6 +99,7 @@ function doGet(e) {
       }); 
     }
 
+
     return json_({ error: 'Unknown request. Use action=latestResults, action=membershipStats, or ss=[&sheet=].' });
   } catch (err) {
     return json_({ error: String((err && err.message) || err) });
