@@ -79,15 +79,24 @@ function doGet(e) {
     if (params.action === 'bootstrap') return json_(getBootstrapData());
 
     // Legacy discovery contract (Championship Standings module)
-    if (params.ss) {
-      if (!/^[A-Za-z0-9_-]{10,}$/.test(params.ss)) {
-        return json_({ error: 'Parameter "ss" must be a valid spreadsheet ID.' });
-      }
-      var ss = SpreadsheetApp.openById(params.ss);
-      if (params.sheet) return json_(serveSheet_(ss, params.sheet));
-      return json_({ sheets: ss.getSheets().map(function (s) {
-        return { name: s.getName(), gid: s.getSheetId() };
-      }) });
+    if (params.ss) { 
+      if (!/^[A-Za-z0-9_-]{10,}$/.test(params.ss)) { 
+        return json_({ error: 'Parameter "ss" must be a valid spreadsheet ID.' }); 
+      } 
+      
+      var ss = SpreadsheetApp.openById(params.ss); 
+      if (params.sheet) return json_(serveSheet_(ss, params.sheet)); 
+      
+      // Filter out hidden sheets before mapping the data
+      return json_({ 
+        sheets: ss.getSheets()
+          .filter(function (s) { 
+            return !s.isSheetHidden(); 
+          })
+          .map(function (s) { 
+            return { name: s.getName(), gid: s.getSheetId() }; 
+          }) 
+      }); 
     }
 
     return json_({ error: 'Unknown request. Use action=latestResults, action=membershipStats, or ss=[&sheet=].' });
