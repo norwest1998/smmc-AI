@@ -121,7 +121,7 @@ function handleAction(action, payload) {
     const hexKey = payload.hexKey;
     const sheetName = payload.sheet || payload.sheetName;
 console.log("Domina: " + domain + "Payload: " + payload.domain + " Sheet: " + sheetName);
-    if (domain && sheetName) {
+
       const sheet       = getSheet(domain, sheetName);
       const allValues   = sheet.getDataRange().getValues();
       const config      = getSheetConfig(domain, sheetName);
@@ -131,7 +131,7 @@ console.log("Domina: " + domain + "Payload: " + payload.domain + " Sheet: " + sh
       const headers     = regHeaders ?? allValues[headerRow].map(h => String(h).trim());
       const dataRows    = allValues.slice(headerRow + 1);         // rows after header
       const keyCol      = headers.indexOf(keyField);        
-    }
+
     let rows = null;
 
     switch (action) {
