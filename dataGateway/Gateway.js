@@ -220,7 +220,7 @@ console.log("Domina: " + domain + "Payload: " + payload.domain + " Sheet: " + sh
             batchResults[req.domain + "|" + req.sheet] = [];
           }
         });
-        return = json({ results: batchResults });
+        return json({ results: batchResults });
 
       default:
         throw new Error("Invalid or unsupported action: " + action);
