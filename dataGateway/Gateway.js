@@ -93,6 +93,7 @@ const OLDREGISTRY = [
     }
   }
 ];
+
 function doGet(e) {
   const params = e ? e.parameter : {};
   const action = params.action || "getRegistry";
@@ -117,17 +118,20 @@ function handleAction(action, payload) {
     const updates = payload.updates || payload.update || {};
     const rowData = payload.rowData || {};
     const domain = payload.domain;
-    const sheetName = payload.sheetName;
+    const hexKey = payload.hexKey;
+    const sheetName = payload.sheet || payload.sheetName;
 console.log("Domina: " + domain + "Payload: " + payload.domain + " Sheet: " + sheetName);
-    const sheet       = getSheet(domain, sheetName);
-    const allValues   = sheet.getDataRange().getValues();
-    const config      = getSheetConfig(domain, sheetName);
-    const headerRow   = (config?.headerRow ?? 1) - 1;           // 0-based index
-    const regHeaders  = config?.headers ?? null;
-    const keyField    = getKeyField(domain, sheetName);
-    const headers     = regHeaders ?? allValues[headerRow].map(h => String(h).trim());
-    const dataRows    = allValues.slice(headerRow + 1);         // rows after header
-    const keyCol      = headers.indexOf(keyField);        
+    if (domain && sheetName) {
+      const sheet       = getSheet(domain, sheetName);
+      const allValues   = sheet.getDataRange().getValues();
+      const config      = getSheetConfig(domain, sheetName);
+      const headerRow   = (config?.headerRow ?? 1) - 1;           // 0-based index
+      const regHeaders  = config?.headers ?? null;
+      const keyField    = getKeyField(domain, sheetName);
+      const headers     = regHeaders ?? allValues[headerRow].map(h => String(h).trim());
+      const dataRows    = allValues.slice(headerRow + 1);         // rows after header
+      const keyCol      = headers.indexOf(keyField);        
+    }
     let rows = null;
 
     switch (action) {
@@ -201,7 +205,7 @@ console.log("Domina: " + domain + "Payload: " + payload.domain + " Sheet: " + sh
           result =  json({ error: "Missing 'requests' parameter" });
           break;
         }
-        const batchReqs = JSON.parse(payload.requests);
+        const batchReqs = typeof payload.requests === "string" ? JSON.parse(payload.requests) : payload.requests;
         const batchResults = {};
         batchReqs.forEach(req => {
           try {
@@ -216,8 +220,7 @@ console.log("Domina: " + domain + "Payload: " + payload.domain + " Sheet: " + sh
             batchResults[req.domain + "|" + req.sheet] = [];
           }
         });
-        result = json({ results: batchResults });
-        break;
+        return = json({ results: batchResults });
 
       default:
         throw new Error("Invalid or unsupported action: " + action);
