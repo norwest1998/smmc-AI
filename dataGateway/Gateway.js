@@ -137,7 +137,7 @@ console.log("Domina: " + domain + "Payload: " + payload.domain + " Sheet: " + sh
     switch (action) {
       case "getRegistry":
         const forceRefresh = payload.forceRefresh === true || payload.forceRefresh === "true";
-        result = getSchemaRegistry(forceRefresh);
+        result = getSystemRegistry(forceRefresh);
         break;
 
       case "registerSchema":
