@@ -138,7 +138,7 @@ function handleAction(action, payload) {
 
       case "registerSchema":
         // ACTION 1 & 3: Save schema, invalidate cache, and bump version checksum
-        result = registerSchema(payload);
+        result = upsertSchemaRegistry(payload);
         break;
 
       case "layout":
