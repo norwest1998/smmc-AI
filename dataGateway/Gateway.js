@@ -322,7 +322,8 @@ function json(obj) {
 // ── Registry Helpers ──────────────────────────────────────────────
 
 function getRegistryEntry(domain) {
-  const entry = REGISTRY.find(r => r && r[domain]);
+  const currentRegistry = getSystemRegistry(); // Call the cached getter
+  const entry = currentRegistry.find(r => r && r[domain]);
   if (!entry) throw new Error(`Unknown domain: ${domain}`);
   return entry[domain];
 }
@@ -456,66 +457,80 @@ function appendAverageScoreRequest(action, domain, sheet, rowData) {
 
 }
 
+function getSystemRegistry() {
+  const cache = CacheService.getScriptCache();
+  const cachedRegistry = cache.get("SYSTEM_REGISTRY");
+  
+  if (cachedRegistry) {
+    return JSON.parse(cachedRegistry);
+  }
+
+  // If not in cache, build it from the CONFIG / SchemaRegistry sheet
+  const registry = buildDynamicRegistryFromSheet();
+  
+  // Save to cache for 6 hours (21600 seconds)
+  cache.put("SYSTEM_REGISTRY", JSON.stringify(registry), 21600);
+  
+  return registry;
+}
+
 function buildDynamicRegistryFromSheet() {
-  const entry = getRegistryEntry("audit"); 
-  const ss = SpreadsheetApp.openById(entry.spreadsheetId);
+  // Hardcode JUST the ID of the master CONFIG sheet
+  const CONFIG_SPREADSHEET_ID = "1nRRzaJ_YBLZKyQbJ0oMQxg5ABRX-ODh3ioh-wVuQJSo"; 
+  const ss = SpreadsheetApp.openById(CONFIG_SPREADSHEET_ID);
 
   const schemaSheet = ss.getSheetByName("SchemaRegistry");
   if (!schemaSheet) throw new Error("SchemaRegistry sheet not found.");
 
   const data = schemaSheet.getDataRange().getValues();
+  const headers = data[0].map(h => String(h).trim().toLowerCase());
   
-  // Use existing config to dynamically find the header row index (1-based to 0-based array index)
-  const schemaConfig = getSheetConfig("audit", "SchemaRegistry");
-  const headerRowIdx = (schemaConfig?.headerRow ?? 1) - 1;
-
-  // Prevent crashing if the sheet is effectively empty
-  if (data.length <= headerRowIdx + 1) return [];
-
-  // Parse headers from the correct dynamic row
-  const headers = data[headerRowIdx].map(h => String(h).trim().toLowerCase());
   const domainIdx = headers.indexOf("domain");
   const sheetIdx = headers.indexOf("sheet");
   const colsIdx = headers.indexOf("columns");
+  const ssIdIdx = headers.indexOf("spreadsheetid"); // New column in sheet
+  const keyIdx = headers.indexOf("key field");      // New column in sheet
+  const headerRowIdx = headers.indexOf("header row"); // New column in sheet
 
-  const keyCandidates = ['RowID', 'ID', 'HexKey', 'Key', 'Batch Key', 'ActionID', 'NoteID', 'BoatID', 'TopicID', 'HexCode', 'Request ID'];
+  const registryArray = [];
   const domainMap = {};
 
-  // Start looping directly after the header row
-  for (let i = headerRowIdx + 1; i < data.length; i++) {
+  for (let i = 1; i < data.length; i++) {
     const domain = String(data[i][domainIdx] || '').trim().toLowerCase();
     const sheetName = String(data[i][sheetIdx] || '').trim();
     const colsRaw = String(data[i][colsIdx] || '').trim();
+    const spreadsheetId = String(data[i][ssIdIdx] || '').trim();
+    const keyCol = String(data[i][keyIdx] || '').trim();
+    const headerRow = parseInt(data[i][headerRowIdx]) || 1;
 
-    if (!domain || !sheetName || !colsRaw) continue;
+    if (!domain || !sheetName || !colsRaw || !spreadsheetId) continue;
 
     let columns = [];
-    try { columns = JSON.parse(colsRaw); } catch (e) { columns = colsRaw.split(',').map(c => c.trim()); }
+    try { columns = JSON.parse(colsRaw); } 
+    catch (e) { columns = colsRaw.split(',').map(c => c.trim()); }
 
     if (!domainMap[domain]) {
-      // Lookup the spreadsheetId dynamically from the global REGISTRY constant
-      const existingDomainInfo = REGISTRY.find(r => r[domain])?.[domain];
-      
       domainMap[domain] = {
-        spreadsheetId: existingDomainInfo ? existingDomainInfo.spreadsheetId : "",
+        spreadsheetId: spreadsheetId,
         defaultSheet: sheetName,
         sheets: {}
       };
     }
 
-    let keyCol = columns.find(c => keyCandidates.includes(c.trim())) ||
-                 columns.find(c => /id|key/i.test(c.trim())) ||
-                 columns[0];
-
-    // Maintain existing sheet overrides from REGISTRY if they exist (like non-standard headerRows)
-    const existingSheetInfo = REGISTRY.find(r => r[domain])?.[domain]?.sheets?.[sheetName];
-
     domainMap[domain].sheets[sheetName] = {
-      headers: columns,
-      key: keyCol,
-      headerRow: existingSheetInfo?.headerRow ?? 1
+      key: keyCol || columns[0], // Fallback to first col if blank
+      headerRow: headerRow,
+      headers: columns
     };
   }
+  
+  // Format exactly how the original const REGISTRY was formatted
+  Object.keys(domainMap).forEach(domainKey => {
+    registryArray.push({ [domainKey]: domainMap[domainKey] });
+  });
+
+  return registryArray;
+}
   
   return Object.keys(domainMap).map(domainKey => ({
       [domainKey]: domainMap[domainKey]
