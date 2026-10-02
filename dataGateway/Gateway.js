@@ -1,5 +1,5 @@
 // ── doGet ─────────────────────────────────────────────────────────
-const REGISTRY = [
+const OLDREGISTRY = [
   {
     members: {
       spreadsheetId: "1nFqeV1U0c_RLaZK4amf7QR1MMwB9q8gZLc4HriUH9iI",
@@ -38,7 +38,7 @@ const REGISTRY = [
       spreadsheetId: "1AVopdio8GLzwYGQjiX7qiVBXWQVpmArmaGBLWYTHxrM",
       defaultSheet: "Event Data",
       sheets: {
-        'Event Data': {key: "HexKey", headerRow: 1,headers: ["HexKey", "EventName", "Date", "Location"]},
+        'Event Data': {key: "HexKey", headerRow: 1,headers: ["HexKey", " Month", " Date", " Start", " Finish", " Emblem", " Class", " Regatta Type", " Event Type", " Regional Conflicts", " Season", " Round no", " Calendar Synced", " Event", " Results", " Rescheduled Date"]}
       }
     }
   },
@@ -88,163 +88,36 @@ const REGISTRY = [
       spreadsheetId: "1C7n5b1RZ1YCoQ3HHbZQ-UerJLbSfnZ_VYJnQ_CKr-XQ",
       defaultSheet: "GuestRegistrations",
       sheets: {
-        AvgScrReq: {key: "EventID", headerRow: 1,headers: ["HexKey", "EventID", "EventTitle", "EventDate", "RaceClass", "SailNo", "CompetitorName", "HomeClub", "ContactEmail", "RegisteredAt", "Status"]}
+        AvgScrReq: {key: "HexKey", headerRow: 1,headers: ["HexKey", "EventID", "EventTitle", "EventDate", "RaceClass", "SailNo", "CompetitorName", "HomeClub", "ContactEmail", "RegisteredAt", "Status"]}
       }
     }
   }
 ];
-
 function doGet(e) {
-  let action, domain, sheetName, hexKey, filtersArray;
-  try {
-    const params = e?.parameter || {};
-    ({ action, domain, sheet: sheetName, hexKey, filtersArray } = params);
-
-    switch (action) {
-      case "listFolder":
-        return listDriveFolder(params.folderId);
-      case "readFile":
-        return readDriveFile(params.fileId);
-      case "getRegistry":
-        try {
-          return ContentService.createTextOutput(JSON.stringify({ registry: buildDynamicRegistryFromSheet() }))
-            .setMimeType(ContentService.MimeType.JSON);
-        } catch (err) {
-          return ContentService.createTextOutput(JSON.stringify({ error: err.toString() }))
-            .setMimeType(ContentService.MimeType.JSON);
-        }
-      case "triggerProcessing":
-        return triggerResultsScheduler();
-      case "batchFetch":
-        if (!params.requests) return json({ error: "Missing 'requests' parameter" });
-        const batchReqs = JSON.parse(params.requests);
-        const batchResults = {};
-        batchReqs.forEach(req => {
-          try {
-            const bSheet = getSheet(req.domain, req.sheet);
-            const bAllValues = bSheet.getDataRange().getValues();
-            const bConfig = getSheetConfig(req.domain, req.sheet);
-            const bHeaderRow = (bConfig?.headerRow ?? 1) - 1;
-            const bHeaders = bConfig?.headers ?? bAllValues[bHeaderRow].map(h => String(h).trim());
-            const bDataValues = bAllValues.slice(bHeaderRow + 1);
-            batchResults[req.domain + "|" + req.sheet] = rowsToObjects(bHeaders, bDataValues, false);
-          } catch(err) {
-            batchResults[req.domain + "|" + req.sheet] = [];
-          }
-        });
-        return json({ results: batchResults });
-    }
-
-    if (!domain) {
-      return json({ error: 'Missing required "domain" parameter for this action.' });
-    }
-
-    const sheet       = getSheet(domain, sheetName);
-    const allValues   = sheet.getDataRange().getValues();
-    const config      = getSheetConfig(domain, sheetName);
-    const headerRow   = (config?.headerRow ?? 1) - 1;          
-    const regHeaders  = config?.headers ?? null;
-    const keyField    = getKeyField(domain, sheetName);
-    const headers     = regHeaders ?? allValues[headerRow].map(h => String(h).trim());
-    const dataValues  = allValues.slice(headerRow + 1);         
-    let rows = null;
-
-    switch (action) {
-      case "layout":
-        const layout = getSheetLayout(domain, sheetName);
-        return json({success: true, domain: domain, sheetName: sheetName, layout: layout});
-
-      case "fetch": 
-        rows = rowsToObjects(headers, dataValues, false);
-        return json({ values: rows });
-
-      case "display": 
-        if (!hexKey) return json({ error: "hexKey required for display" });
-        if (!keyField) return json({ error: "No key configured for this sheet" });
-
-        rows = rowsToObjects(headers, dataValues, false);
-        const record = rows.find(r => String(r[keyField]).trim() === String(hexKey).trim());
-        if (!record) return json({ error: "Record not found" });
-        return json({ record });
-
-      case "search":
-        const results = findResults(domain, sheetName, filtersArray);
-        return json({ values: results });
-
-      default:
-        auditLog(action, domain, sheetName, hexKey, "", "Unknown action: " + action, "", "Failed");
-        return json({ error: `Unknown action: ${action}` });
-    } 
-
-  } catch(err) {
-    auditLog(action, domain, sheetName, hexKey, "", err.message, "", "Failed");
-    return json({ error: err.message });
-  }
+  const params = e ? e.parameter : {};
+  const action = params.action || "getRegistry";
+  return handleAction(action, params);
 }
 
 function doPost(e) {
-  let action, domain, sheetName, hexKey;
+  let payload = {};
   try {
-    const body    = JSON.parse(e?.postData?.contents || "{}");
-    ({ action, domain, sheet: sheetName, hexKey } = body);
-    
-    // -------- READ ACTIONS --------
-    if (action === "batchFetch") {
-        const batchReqs = body.requests || [];
-        const batchResults = {};
-        batchReqs.forEach(req => {
-          try {
-            const bSheet = getSheet(req.domain, req.sheet);
-            const bAllValues = bSheet.getDataRange().getValues();
-            const bConfig = getSheetConfig(req.domain, req.sheet);
-            const bHeaderRow = (bConfig?.headerRow ?? 1) - 1;
-            const bHeaders = bConfig?.headers ?? bAllValues[bHeaderRow].map(h => String(h).trim());
-            const bDataValues = bAllValues.slice(bHeaderRow + 1);
-            batchResults[req.domain + "|" + req.sheet] = rowsToObjects(bHeaders, bDataValues, false);
-          } catch(err) {
-            batchResults[req.domain + "|" + req.sheet] = [];
-          }
-        });
-        return json({ results: batchResults });
-    }
+    payload = e.postData && e.postData.contents ? JSON.parse(e.postData.contents) : {};
+  } catch (err) {
+    payload = e ? e.parameter : {};
+  }
+  const action = payload.action || (e ? e.parameter.action : "registerSchema");
+  return handleAction(action, payload);
+}
 
-    if (["fetch", "display", "search", "layout"].includes(action)) {
-        if (!domain) return json({ error: 'Missing required "domain" parameter.' });
-        if (action === "layout") {
-          const layout = getSheetLayout(domain, sheetName);
-          return json({success: true, domain, sheetName, layout});
-        }
-        if (action === "search") {
-          const results = findResults(domain, sheetName, body.filtersArray);
-          return json({ values: results });
-        }
+function handleAction(action, payload) {
+  try {
+    let result;
 
-        const sheet       = getSheet(domain, sheetName);
-        const allValues   = sheet.getDataRange().getValues();
-        const config      = getSheetConfig(domain, sheetName);
-        const headerRow   = (config?.headerRow ?? 1) - 1;
-        const regHeaders  = config?.headers ?? null;
-        const keyField    = getKeyField(domain, sheetName);
-        const headers     = regHeaders ?? allValues[headerRow].map(h => String(h).trim());
-        const dataValues  = allValues.slice(headerRow + 1);
-
-        if (action === "fetch") {
-          const rows = rowsToObjects(headers, dataValues, false);
-          return json({ values: rows });
-        }
-        if (action === "display") {
-          if (!hexKey) return json({ error: "hexKey required for display" });
-          if (!keyField) return json({ error: "No key configured for this sheet" });
-          const rows = rowsToObjects(headers, dataValues, false);
-          const record = rows.find(r => String(r[keyField]).trim() === String(hexKey).trim());
-          if (!record) return json({ error: "Record not found" });
-          return json({ record });
-        }
-    }
-    // -------- END READ ACTIONS --------
-
-    const updates = body.updates || body.update || {};
-    const rowData = body.rowData || {};
+    const updates = payload.updates || payload.update || {};
+    const rowData = payload.rowData || {};
+    const domain = payload.domain;
+    const sheetName = payload.sheetName;
 
     const sheet       = getSheet(domain, sheetName);
     const allValues   = sheet.getDataRange().getValues();
@@ -254,9 +127,28 @@ function doPost(e) {
     const keyField    = getKeyField(domain, sheetName);
     const headers     = regHeaders ?? allValues[headerRow].map(h => String(h).trim());
     const dataRows    = allValues.slice(headerRow + 1);         // rows after header
-    const keyCol      = headers.indexOf(keyField);
+    const keyCol      = headers.indexOf(keyField);        
+    let rows = null;
 
     switch (action) {
+      case "getRegistry":
+        const forceRefresh = payload.forceRefresh === true || payload.forceRefresh === "true";
+        result = getSchemaRegistry(forceRefresh);
+        break;
+
+      case "registerSchema":
+        // ACTION 1 & 3: Save schema, invalidate cache, and bump version checksum
+        result = registerSchema(payload);
+        break;
+
+      case "layout":
+        const layout = getSheetLayout(domain, sheetName);
+        return json({success: true, domain: domain, sheetName: sheetName, layout: layout});
+
+      case "fetch":
+        rows = rowsToObjects(headers, dataRows, false);
+        return json({ values: rows });
+
       case "append":
         const row = headers.map(h => rowData[h] ?? "");
         sheet.appendRow(row);
@@ -295,22 +187,50 @@ function doPost(e) {
         });
         return json({ success: true, updatedCount });
 
-      case "registerSchema":
-        return json(upsertSchemaRegistry(body));
+      case "listFolder":
+        return listDriveFolder(payload.folderId);
+      
+      case "readFile":
+        return readDriveFile(payload.fileId);
 
       case "triggerProcessing":
         return triggerResultsScheduler();
 
-      case "appendAvgScrReq":
-        return appendAverageScoreRequest(action, domain, sheet, rowData);
-        
-      default:   
-        auditLog(action, domain, sheetName, hexKey, "", "Unknown action " + action, "", "Failed");
-        return json({ error: `Unknown action: ${action}` });
+      case "batchFetch":
+        if (!payload.requests) {
+          result =  json({ error: "Missing 'requests' parameter" });
+          break;
+        }
+        const batchReqs = JSON.parse(payload.requests);
+        const batchResults = {};
+        batchReqs.forEach(req => {
+          try {
+            const bSheet = getSheet(req.domain, req.sheet);
+            const bAllValues = bSheet.getDataRange().getValues();
+            const bConfig = getSheetConfig(req.domain, req.sheet);
+            const bHeaderRow = (bConfig?.headerRow ?? 1) - 1;
+            const bHeaders = bConfig?.headers ?? bAllValues[bHeaderRow].map(h => String(h).trim());
+            const bDataValues = bAllValues.slice(bHeaderRow + 1);
+            batchResults[req.domain + "|" + req.sheet] = rowsToObjects(bHeaders, bDataValues, false);
+          } catch(err) {
+            batchResults[req.domain + "|" + req.sheet] = [];
+          }
+        });
+        result = json({ results: batchResults });
+        break;
+
+      default:
+        throw new Error("Invalid or unsupported action: " + action);
     }
-  } catch(err) {
-    auditLog(action, domain, sheetName, hexKey, "", err.message, "",  "Failed");
-    return json({ error: err.message });
+    if (!payload.domain) {
+      return json({ error: 'Missing required "domain" parameter for this action.' });
+    }
+    return ContentService.createTextOutput(JSON.stringify({ success: true, data: result }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
   }
 }
 
@@ -457,25 +377,67 @@ function appendAverageScoreRequest(action, domain, sheet, rowData) {
 
 }
 
-function getSystemRegistry() {
+/**
+ * Core System Registry Accessor
+ * Preserves existing build logic while preventing stale cache overrides.
+ */
+function getSystemRegistry(forceRefresh) {
+  const isForce = forceRefresh === true || forceRefresh === "true";
   const cache = CacheService.getScriptCache();
-  const cachedRegistry = cache.get("SYSTEM_REGISTRY");
+  const scriptProps = PropertiesService.getScriptProperties();
   
-  if (cachedRegistry) {
-    return JSON.parse(cachedRegistry);
+  const CACHE_KEY = "SYSTEM_REGISTRY_CACHE";
+  const VERSION_KEY = "SCHEMA_VERSION";
+  
+  const currentVersion = scriptProps.getProperty(VERSION_KEY) || "0";
+
+  // Return cached payload only if forceRefresh is false AND version matches
+  if (!isForce) {
+    const cachedStr = cache.get(CACHE_KEY);
+    if (cachedStr) {
+      try {
+        const cachedPayload = JSON.parse(cachedStr);
+        if (String(cachedPayload._version) === String(currentVersion)) {
+          return cachedPayload.registry;
+        }
+      } catch (e) {
+        console.warn("Corrupted registry cache encountered; re-compiling.");
+      }
+    }
   }
 
-  // If not in cache, build it from the CONFIG / SchemaRegistry sheet
-  const registry = buildDynamicRegistryFromSheet();
-  
-  // Save to cache for 6 hours (21600 seconds)
-  cache.put("SYSTEM_REGISTRY", JSON.stringify(registry), 21600);
-  
+  // =========================================================
+  // YOUR EXISTING REGISTRY BUILD LOGIC HERE
+  // =========================================================
+  // Keep whatever getSystemRegistry() currently executes 
+  // (e.g., buildDynamicRegistryFromSheet(), loading sheets, parsing domains)
+  const registry = buildDynamicRegistryFromSheet(); 
+  // =========================================================
+
+  // Cache fresh registry alongside current version checksum
+  try {
+    cache.put(CACHE_KEY, JSON.stringify({
+      _version: currentVersion,
+      registry: registry
+    }), 21600); // 6 hours
+  } catch (e) {
+    console.warn("System registry size exceeds CacheService limit; bypassing cache storage.");
+  }
+
   return registry;
 }
 
+function invalidateAndBumpRegistry() {
+  const cache = CacheService.getScriptCache();
+  cache.remove("SYSTEM_REGISTRY_CACHE");
+  
+  const newVersion = Date.now().toString();
+  PropertiesService.getScriptProperties().setProperty("SCHEMA_VERSION", newVersion);
+  return newVersion;
+}
+
 function buildDynamicRegistryFromSheet() {
-  // Hardcode JUST the ID of the master CONFIG sheet
+  // Hardcode JUST the ID of the master CONFIG sheet (Audit Trail)
   const CONFIG_SPREADSHEET_ID = "1nRRzaJ_YBLZKyQbJ0oMQxg5ABRX-ODh3ioh-wVuQJSo"; 
   const ss = SpreadsheetApp.openById(CONFIG_SPREADSHEET_ID);
 
@@ -531,17 +493,12 @@ function buildDynamicRegistryFromSheet() {
 
   return registryArray;
 }
-  
-  return Object.keys(domainMap).map(domainKey => ({
-      [domainKey]: domainMap[domainKey]
-  }));
-}
 
 function setupSchemaRegistry() {
   const REGISTRY_SHEET = "SchemaRegistry";
   const HEADERS = [
     "Domain", "Sheet", "Columns", "Baseline Columns",
-    "Row Count", "Last Checked", "Status"
+    "Row Count", "Last Checked", "Status", "SpreadsheetId", "Key Field", "Header Row"
   ];
 
   const entry = getRegistryEntry("audit"); 
@@ -573,6 +530,8 @@ function upsertSchemaRegistry(payload) {
       sheet.getRange(i + 1, 1, 1, 7).setValues([[
         domain, sheetName, cols, baseline, rowCount, now, status
       ]]);
+      invalidateAndBumpRegistry();
+      getSystemRegistry(true);
       return { ok: true, status };
     }
   }
