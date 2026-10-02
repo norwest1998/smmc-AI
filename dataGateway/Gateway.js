@@ -118,7 +118,7 @@ function handleAction(action, payload) {
     const rowData = payload.rowData || {};
     const domain = payload.domain;
     const sheetName = payload.sheetName;
-
+console.log("Domina: " + domain + "Payload: " + payload.domain + " Sheet: " + sheetname);
     const sheet       = getSheet(domain, sheetName);
     const allValues   = sheet.getDataRange().getValues();
     const config      = getSheetConfig(domain, sheetName);
