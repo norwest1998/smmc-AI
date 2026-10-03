@@ -1,44 +1,80 @@
-/**
- * ============================================================================
- * HOMEPAGE DATA API  (Google Apps Script Web App)
- * ============================================================================
- * Backend for the SMMC HomePage landing site. This is a STANDALONE Apps Script
- * project (its own script ID / deployment - see README.md in this folder).
- * Deploy as a Web App (Execute as: Me, Access: Anyone) and paste the /exec URL
- * into the HOME_DATA_API constant in the HomePage HTML.
- *
- * ENDPOINTS (GET):
- *   ?action=latestResults
- *       Finds the most recent "Processed" event in SMMC Annual Calendar ->
- *       "Event Data" (status in column O), resolves the Overall Results
- *       workbook  "Overall Results <Class> <RegattaType> <Season>"
- *       (Drive folder "Overall Results Sheets", or the cached
- *       regattaWorkbookId_* script property), locates the last round
- *       ("Round N" sheet, or the right-most "Round N" column on the
- *       "Overall Results" sheet) and returns the top finishers.
- *
- *   ?action=membershipStats
- *       Returns totals + breakdowns for the four HomePage topics:
- *         members      - Club Management "Members"      by member type
- *         applications - Membership Applications rows   by Status (col B)
- *         boats        - Club Management "ClassMembers" by ClassName
- *         financial    - Club Management "Members"      by Paid up
- *
- *   ?ss=<spreadsheetId>                        -> {sheets:[{name,gid}]}
- *   ?ss=<spreadsheetId>&sheet=<name>           -> {meta, headers, rows}
- *       Legacy discovery contract kept for the Championship Standings
- *       module, so this single deployment can serve the whole page.
- * 
- *   ?action=membersList   → returns { members: [...] }
- *   ?action=applicationsList → returns { applications: [...] }
- * 
- * ============================================================================
- */
+// --- CACHE UTILITIES ---
+function putCachedData(key, string) {
+  var cache = CacheService.getScriptCache();
+  var chunkSize = 90000; // Safe threshold well below 100KB
+  var chunks = Math.ceil(string.length / chunkSize);
+  var data = {};
+  data[key + '_chunks'] = String(chunks);
+  for (var i = 0; i < chunks; i++) {
+    data[key + '_' + i] = string.substring(i * chunkSize, (i + 1) * chunkSize);
+  }
+  cache.putAll(data, 21600); // 6 hours (outlives the 5-hour trigger)
+}
+
+function getCachedData(key) {
+  var cache = CacheService.getScriptCache();
+  var chunksStr = cache.get(key + '_chunks');
+  if (!chunksStr) return null;
+  var chunks = parseInt(chunksStr, 10);
+  var keys = [];
+  for (var i = 0; i < chunks; i++) keys.push(key + '_' + i);
+  var data = cache.getAll(keys);
+  var string = '';
+  for (var i = 0; i < chunks; i++) {
+    if (typeof data[key + '_' + i] === 'undefined') return null;
+    string += data[key + '_' + i];
+  }
+  return string;
+}
+
+function clearCachedData(key) {
+  var cache = CacheService.getScriptCache();
+  var chunksStr = cache.get(key + '_chunks');
+  if (chunksStr) {
+    var chunks = parseInt(chunksStr, 10);
+    var keys = [key + '_chunks'];
+    for (var i = 0; i < chunks; i++) keys.push(key + '_' + i);
+    cache.removeAll(keys);
+  }
+}
+
+// --- SCHEDULED TRIGGER ---
+function setupCacheTrigger() {
+  // Clear any existing triggers for this function to prevent duplicates
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'refreshBootstrapCache') {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+  
+  // Set to run every 5 hours in the background
+  ScriptApp.newTrigger('refreshBootstrapCache')
+           .timeBased()
+           .everyHours(5)
+           .create();
+           
+  // Run once immediately to warm the cache
+  refreshBootstrapCache();
+}
+
+function refreshBootstrapCache() {
+  var data = {
+    latestResults: getLatestResults(),
+    stats:         safe_(getMembershipStats),
+    members:       safe_(function () { return getMembersList_().members; }),
+    boats:         safe_(function () { return getBoatsList().boats; }),
+    applications:  safe_(function () { return getApplicationsList_().applications; }),
+    requests:      safe_(function () { return getRequestList().requests; })
+  };
+  
+  putCachedData('HP_BOOTSTRAP_DATA', JSON.stringify(data));
+  return data;
+}
 
 // ================================ CONFIGURATION ===============================
 
 var HPAPI_CFG = {
-  // Spreadsheet IDs (leave blank to resolve by name via DriveApp)
   clubManagementId: '1nFqeV1U0c_RLaZK4amf7QR1MMwB9q8gZLc4HriUH9iI',
   clubManagementName: 'SMMC Club Management',
 
@@ -46,10 +82,10 @@ var HPAPI_CFG = {
   membershipSheetName: 'Membership Applications',
   membershipDataStartRow: 8,
 
-  annualCalendarId: '1AVopdio8GLzwYGQjiX7qiVBXWQVpmArmaGBLWYTHxrM',                    // e.g. '1AbC...' - blank = resolve by name
+  annualCalendarId: '1AVopdio8GLzwYGQjiX7qiVBXWQVpmArmaGBLWYTHxrM',
   annualCalendarName: 'SMMC Annual Calendar',
   eventDataSheet: 'Event Data',
-  eventDataStatusCol: 15,                  // Column O - fallback when no "Status" header
+  eventDataStatusCol: 15,
 
   overallFolderName: 'Overall Results Sheets',
   overallSheetName: 'Overall Results',
@@ -70,6 +106,12 @@ const WEATHER_URL = `https://script.google.com/macros/s/AKfycbworw_FnbKehShRIfhb
 function doGet(e) {
   var params = (e && e.parameter) || {};
   try {
+    // Intercept cache clear webhook from Gateway.js
+    if (params.action === 'clearCache') {
+      clearCachedData('HP_BOOTSTRAP_DATA');
+      return json_({ success: true, message: 'Cache busted successfully' });
+    }
+  
     if (params.action === 'latestResults') return json_(getLatestResults());
     if (params.action === 'membershipStats') return json_(getMembershipStats());
     if (params.action === 'membersList')      return json_(getMembersList_());
@@ -113,7 +155,6 @@ function json_(obj) {
 
 // ============================== SPREADSHEET UTIL ==============================
 
-/** Opens a configured spreadsheet by ID, falling back to a Drive name search. */
 function openSpreadsheet_(configuredId, fallbackName) {
   if (configuredId) return SpreadsheetApp.openById(configuredId);
   var folders = DriveApp.getFoldersByName(fallbackName);
@@ -124,7 +165,6 @@ function openSpreadsheet_(configuredId, fallbackName) {
   throw new Error('Could not find spreadsheet "' + fallbackName + '". Set its ID in HPAPI_CFG.');
 }
 
-/** Case/space-insensitive header matcher. Returns 0-based index or -1. */
 function findHeader_(headers, candidates) {
   var norm = headers.map(function (h) { return String(h).trim().toLowerCase().replace(/\s+/g, ''); });
   for (var c = 0; c < norm.length; c++) {
@@ -133,11 +173,6 @@ function findHeader_(headers, candidates) {
   return -1;
 }
 
-/**
- * Coerces a cell value into clean text. Cells holding an in-cell image come
- * back from getValues() as CellImage objects whose String() is "CellImage" -
- * those (and other rich objects/dates) are treated as empty.
- */
 function sanitizeCell_(value) {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value.trim();
@@ -154,15 +189,16 @@ function safe_(fn) {
 }
 
 function getBootstrapData() {
-  // One failing sheet must not take down the whole payload; the client skips null sections.
-  return {
-    latestResults: getLatestResults(),          // reads the HP_LATEST_RESULTS_CACHE script property
-    stats:         safe_(getMembershipStats),
-    members:       safe_(function () { return getMembersList_().members; }),
-    boats:         safe_(function () { return getBoatsList().boats; }),
-    applications:  safe_(function () { return getApplicationsList_().applications; }),
-    requests:      safe_(function () { return getRequestList().requests; })
-  };
+  var cachedStr = getCachedData('HP_BOOTSTRAP_DATA');
+  if (cachedStr) {
+    try {
+      return JSON.parse(cachedStr);
+    } catch (e) {
+      console.warn("Error parsing cache. Falling back.");
+    }
+  }
+  // Rebuild if cache is empty or corrupted
+  return refreshBootstrapCache();
 }
 
 function getRequestList() {
@@ -223,12 +259,6 @@ function getBoatsList() {
 
 // ============================== MEMBERS LIST ==================================
 
-/**
- * Returns active members with the fields needed by the Members panel.
- * Source: Club Management "Members" sheet.
- * Columns (0-based, matched by header): Active, MemberName, Membership,
- *   WhatsApp, Committee
- */
 function getMembersList_() {
   var ss = openSpreadsheet_(HPAPI_CFG.clubManagementId, HPAPI_CFG.clubManagementName);
   var sheet = ss.getSheetByName('Members');
@@ -241,24 +271,13 @@ function getMembersList_() {
   var nameCol      = findHeader_(h, ['membername', 'name']);
   var membershipCol= findHeader_(h, ['membership', 'membershiptype', 'membertype']);
   var waCol        = findHeader_(h, ['whatsapp']);
-  var committeeCol = findHeader_(h, ['committee']); // note: your sheet has a typo
+  var committeeCol = findHeader_(h, ['committee']); 
 
   var members = [];
   for (var r = 1; r < values.length; r++) {
     var row = values[r];
-
-    // Skip blank rows
     var name = sanitizeCell_(row[nameCol]);
     if (!name) continue;
-
-    /* Skip inactive members if Active column exists
-    if (activeCol !== -1) {
-      var active = row[activeCol];
-      var isActive = (active === true ||
-                      String(active).trim().toUpperCase() === 'TRUE' ||
-                      String(active).trim().toLowerCase() === 'yes');
-      if (!isActive) continue;
-    } */
 
     members.push({
       name:       name,
@@ -269,29 +288,18 @@ function getMembersList_() {
     });
   }
 
-  // Sort alphabetically by name
   members.sort(function(a, b) { return a.name.localeCompare(b.name); });
-
   return { members: members };
 }
 
 // ============================ APPLICATIONS LIST ===============================
 
-/**
- * Returns membership applications with the fields needed by the Applications panel.
- * Source: Membership Applications sheet (same as getApplicationStats_).
- * Fields: RowID, Status, Timestamp, First name, Surname, Membership Type,
- *   Name of Current Club, Nominating member name, Seconders member name,
- *   LastStatusUpdated
- */
 function getApplicationsList_() {
   var ss = SpreadsheetApp.openById(HPAPI_CFG.membershipAppsId);
   var sheet = ss.getSheetByName(HPAPI_CFG.membershipSheetName || 'Membership Applications');
   if (!sheet) throw new Error('"' + HPAPI_CFG.membershipSheetName + '" sheet not found.');
 
   var values = sheet.getDataRange().getValues();
-
-  // Your sheet has headers on row 7 (index 6), data from row 8 (index 7)
   var headerRowIdx = 6;
   var dataStartIdx = (HPAPI_CFG.membershipDataStartRow || 8) - 1;
   var h = values[headerRowIdx];
@@ -315,14 +323,11 @@ function getApplicationsList_() {
   var applications = [];
   for (var r = dataStartIdx; r < values.length; r++) {
     var row = values[r];
-
-    // Skip blank rows (no name and no status)
     var firstName = firstNameCol !== -1 ? sanitizeCell_(row[firstNameCol]) : '';
     var surname   = surnameCol   !== -1 ? sanitizeCell_(row[surnameCol])   : '';
     var status    = statusCol    !== -1 ? sanitizeCell_(row[statusCol])    : '';
     if (!firstName && !surname && !status) continue;
 
-    // Format dates
     var ts = timestampCol !== -1 ? row[timestampCol] : '';
     var tsFormatted = (ts instanceof Date)
       ? Utilities.formatDate(ts, tz, 'd MMM yyyy')
@@ -333,7 +338,6 @@ function getApplicationsList_() {
       ? Utilities.formatDate(lu, tz, 'd MMM yyyy')
       : sanitizeCell_(lu);
 
-    // RowID: use column value if present, otherwise use the sheet row number
     var rowId = rowIdCol !== -1 ? sanitizeCell_(row[rowIdCol]) : '';
     if (!rowId) rowId = 'ROW-' + (r + 1);
 
@@ -359,14 +363,7 @@ function getApplicationsList_() {
 }
 
 // ============================== LEGACY DISCOVERY ==============================
-//
-// Standalone port of the former "Get File Sheets" discovery web app so this
-// script no longer depends on any other project. Contract (unchanged):
-//   ?ss=<id>&sheet=<name> -> {meta, headers, rows}
-// consumed by the Championship Standings module in index.html.
 
-/** Returns one sheet as {meta, headers, rows} using the fixed row layout:
- *  rows 1-6 race/championship info, row 7 headers, data rows 8+. */
 function serveSheet_(ss, sheetName) {
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) throw new Error('Sheet not found: ' + sheetName);
@@ -377,15 +374,14 @@ function serveSheet_(ss, sheetName) {
     return (cell instanceof Date) ? Utilities.formatDate(cell, tz, 'yyyy/MM/dd') : cell;
   }
 
-  // Rows 1-6: race/championship info
   var meta = [
-    values[2][1],       // Row 3, Column B
-    fmt(values[2][3]),  // Row 3, Column D
+    values[2][1],       
+    fmt(values[2][3]),  
     values[3][1],
-    values[3][3]        // Row 4, Column D
+    values[3][3]        
   ];
 
-  var headers = values[6]; // row 7 = real column headers
+  var headers = values[6]; 
   var rows = [];
   for (var r = 7; r < values.length; r++) {
     var row = values[r];
@@ -402,18 +398,13 @@ function serveSheet_(ss, sheetName) {
 
 // ============================== LATEST RESULTS ================================
 
-/**
- * Resolves the latest processed event and its last-round results.
- * @return {Object} {ok, event:{roundLabel, championship, racedOn}, results:[...]}
- */
 function getLatestResults() {
   var props = PropertiesService.getScriptProperties();
   var raw = props.getProperty('HP_LATEST_RESULTS_CACHE');
   if (raw) {
-    try { var cached = JSON.parse(raw); if (cached && cached.ok) return cached; } catch (e) { /* fall through */ }
+    try { var cached = JSON.parse(raw); if (cached && cached.ok) return cached; } catch (e) { }
   }
 
-  // Fallback: nothing usable in Script Properties, so build it live (short-lived cache, never overwrites the property)
   var sc = CacheService.getScriptCache();
   var hit = sc.get('HP_LATEST_RESULTS_FALLBACK');
   if (hit) return JSON.parse(hit);
@@ -434,10 +425,6 @@ function getLatestResults() {
   }
 }
 
-/**
- * Live build: most recent "Processed" event in Event Data -> its Overall Results
- * workbook -> last round -> top finishers.
- */
 function buildLatestResults_() {
   var ss = openSpreadsheet_(HPAPI_CFG.annualCalendarId, HPAPI_CFG.annualCalendarName);
   var sheet = ss.getSheetByName(HPAPI_CFG.eventDataSheet);
@@ -453,16 +440,16 @@ function buildLatestResults_() {
   for (var r = 1; r < values.length; r++) {
     var row = values[r];
     if (String(row[statusCol]).trim().toLowerCase() !== 'processed') continue;
-    var d = row[2] instanceof Date ? row[2] : new Date(row[2]);   // Col C
+    var d = row[2] instanceof Date ? row[2] : new Date(row[2]);   
     if (isNaN(d) || d > now) continue;
     if (!best || d > best.date) best = { date: d, row: row };
   }
   if (!best) throw new Error('No processed events found.');
 
-  var cls = String(best.row[6] || '').trim();          // Col G
-  var type = String(best.row[7] || '').trim();         // Col H
-  var champ = String(best.row[8] || '').trim();        // Col I
-  var season = String(best.row[10] || '').trim() || (typeof deriveSeason_ === 'function' ? deriveSeason_(best.date) : String(best.date.getFullYear()));  // Col K
+  var cls = String(best.row[6] || '').trim();          
+  var type = String(best.row[7] || '').trim();         
+  var champ = String(best.row[8] || '').trim();        
+  var season = String(best.row[10] || '').trim() || (typeof deriveSeason_ === 'function' ? deriveSeason_(best.date) : String(best.date.getFullYear()));
 
   var wb = findOverallWorkbook_(cls, type, season, champ);
   var round = resolveLastRound_(wb);
@@ -481,25 +468,17 @@ function buildLatestResults_() {
   };
 }
 
-/**
- * Finds the Overall Results workbook for a class / regatta type / season.
- * Order: cached script property -> exact name in folder -> scored fuzzy match.
- * The championship name (Event Data column I) is tried first because workbooks
- * are named "Overall Results <regattaName> <season>". Empty tokens always
- * match, so a Class cell holding an in-cell image doesn't break the search.
- */
 function findOverallWorkbook_(cls, type, season, champName) {
 
   const cacheKey = `WB_ID_${cls}_${type}_${season}`;
   const props = PropertiesService.getScriptProperties();
   
-  // 1. Check Cache
   let cachedId = props.getProperty(cacheKey);
   if (cachedId) {
     try { 
        return SpreadsheetApp.openById(cachedId); 
     } catch (e) { 
-       props.deleteProperty(cacheKey); // Stale cache
+       props.deleteProperty(cacheKey);
     }
   }
 
@@ -513,15 +492,13 @@ function findOverallWorkbook_(cls, type, season, champName) {
     candidates.push(('Overall Results ' + cls + ' ' + type).replace(/\s+/g, ' ').trim());
   }
 
-  // 1. Cached property (set by Race Results Automation when it creates workbooks)
   for (var i = 0; i < candidates.length; i++) {
     var cached = props.getProperty('regattaWorkbookId_' + candidates[i]);
     if (cached) {
-      try { return SpreadsheetApp.openById(cached); } catch (err) { /* stale cache */ }
+      try { return SpreadsheetApp.openById(cached); } catch (err) {  }
     }
   }
 
-  // 2. Exact then scored fuzzy match inside the Overall Results Sheets folder.
   var folders = DriveApp.getFoldersByName(HPAPI_CFG.overallFolderName);
   var fuzzy = null;
   var fuzzyScore = -1;
@@ -550,7 +527,6 @@ function findOverallWorkbook_(cls, type, season, champName) {
     return SpreadsheetApp.openById(fuzzy.getId());
   }
 
-  // 3. Last resort - search Drive broadly for the class name.
   if (cls) {
     var hits = DriveApp.searchFiles('mimeType = "' + MimeType.GOOGLE_SHEETS +
         '" and title contains "' + cls.replace(/"/g, '') + '"');
@@ -572,14 +548,7 @@ function findOverallWorkbook_(cls, type, season, champName) {
       '", Championship="' + champName + '"]');
 }
 
-/**
- * Locates the last round in an Overall Results workbook.
- * Prefers a dedicated "Round N" sheet; falls back to the right-most
- * "Round N" column on the "Overall Results" sheet (appendRound layout:
- * label row 4, member names col C, sail col B, net scores rows 5+).
- */
 function resolveLastRound_(workbook) {
-  // 1. Dedicated "Round N" sheets
   var sheets = workbook.getSheets();
   var bestSheet = null, bestN = 0;
   for (var i = 0; i < sheets.length; i++) {
@@ -593,30 +562,23 @@ function resolveLastRound_(workbook) {
     return { label: 'Round ' + bestN, results: parseResultsTable_(bestSheet) };
   }
 
-  // 2. "Overall Results" sheet with rounds as columns ("Round N" headers)
   var overall = workbook.getSheetByName(HPAPI_CFG.overallSheetName);
   if (overall) return parseOverallRoundColumn_(overall);
 
   throw new Error('No round sheets found in "' + workbook.getName() + '".');
 }
 
-/**
- * Parses a per-round results sheet into ranked {pos, sailor, sailNo} objects.
- * Column roles are detected from the header row by name.
- */
 function parseResultsTable_(sheet) {
   var values = sheet.getDataRange().getDisplayValues();
   if (!values.length) return [];
 
-  // Find the header row: first row containing both a position-ish and a name-ish cell.
-  // Round sheets (roundWrite) use: Pos | Sail # | Competitor | Result | R1..Rn | ...
   var headerRow = -1, posCol = -1, nameCol = -1;
   for (var r = 0; r < Math.min(values.length, 10); r++) {
     var p = findHeader_(values[r], ['pos', 'position', 'rank', 'place']);
     var nm = findHeader_(values[r], ['competitor', 'name', 'sailor', 'membername', 'membername', 'helmsman', 'skipper']);
     if (p !== -1 && nm !== -1) { headerRow = r; posCol = p; nameCol = nm; break; }
   }
-  if (headerRow === -1) return []; // unrecognised layout
+  if (headerRow === -1) return [];
 
   var sailCol = findHeader_(values[headerRow], ['sailno', 'sailnumber', 'sail#', 'sail', 'sailno.']);
   var classCol = findHeader_(values[headerRow], ['class', 'classname']);
@@ -635,7 +597,6 @@ function parseResultsTable_(sheet) {
     if (isNaN(posNum)) posNum = 9999 + rows.length;
 
     var points = cell(pointsCol);
-
     var cls = cell(classCol);
     rows.push({
       sortPos: posNum,
@@ -653,19 +614,11 @@ function parseResultsTable_(sheet) {
   return rows;
 }
 
-/**
- * Extracts the latest round from the "Overall Results" sheet where rounds are
- * columns (appendRound): the "Round N" label sits in row 4 of the round
- * column, member names in column C, sail numbers in column B, and each
- * member's net score for the round in rows 5+. Results are ranked by
- * ascending score (lowest net points first).
- */
 function parseOverallRoundColumn_(sheet) {
   var lastCol = sheet.getLastColumn();
   var lastRow = sheet.getLastRow();
   if (lastCol < 1 || lastRow < 5) return { label: 'Latest Round', results: [] };
 
-  // Scan the top rows for "Round N" labels; keep the right-most column.
   var top = sheet.getRange(1, 1, Math.min(lastRow, 6), lastCol).getDisplayValues();
   var bestCol = -1, bestN = 0;
   for (var c = 0; c < lastCol; c++) {
@@ -680,8 +633,7 @@ function parseOverallRoundColumn_(sheet) {
   }
   if (bestCol === -1) return { label: 'Latest Round', results: [] };
 
-  // Locate the member header row (overallSetup puts it on row 4).
-  var headerRowIdx = 3, nameCol = 2, sailCol = 1; // sensible defaults for the layout
+  var headerRowIdx = 3, nameCol = 2, sailCol = 1; 
   for (var hr = 0; hr < top.length; hr++) {
     var nm = findHeader_(top[hr], ['membername', 'competitor', 'name', 'sailor']);
     if (nm !== -1) {
@@ -693,7 +645,7 @@ function parseOverallRoundColumn_(sheet) {
     }
   }
 
-  var startRow = headerRowIdx + 2; // headerRowIdx is 0-based: sheet row = idx+1, members start the next row
+  var startRow = headerRowIdx + 2; 
   var rowCount = lastRow - startRow + 1;
   if (rowCount < 1) return { label: 'Round ' + bestN, results: [] };
 
@@ -707,7 +659,7 @@ function parseOverallRoundColumn_(sheet) {
     var sail = String(sailVals[i][0]).trim();
     if (!sailor && !sail) continue;
     var score = parseFloat(String(scoreVals[i][0]).replace(/[^\d.\-]/g, ''));
-    if (isNaN(score)) continue; // no result recorded for this member
+    if (isNaN(score)) continue; 
     rows.push({ score: score, sailor: sailor, sailNo: sail });
   }
 
@@ -720,10 +672,6 @@ function parseOverallRoundColumn_(sheet) {
 
 // ============================ MEMBERSHIP STATISTICS ===========================
 
-/**
- * Collects the four Membership Statistics topics with their breakdowns.
- * @return {Object} {topics:{members, applications, boats, financial}, updatedAt}
- */
 function getMembershipStats() {
   var topics = {
     members: getMemberStats_(),
@@ -737,7 +685,6 @@ function getMembershipStats() {
   };
 }
 
-/** Counts rows by grouping values of a column. Blank group values -> label. */
 function countBy_(values, colIndex, startRow, fallbackLabel) {
   var counts = {};
   for (var r = startRow; r < values.length; r++) {
@@ -754,7 +701,6 @@ function sumCounts_(breakdown) {
   return breakdown.reduce(function (sum, b) { return sum + b.count; }, 0);
 }
 
-/** Total Members - Members sheet grouped by member type. */
 function getMemberStats_() {
   var ss = openSpreadsheet_(HPAPI_CFG.clubManagementId, HPAPI_CFG.clubManagementName);
   var sheet = ss.getSheetByName('Members');
@@ -768,7 +714,6 @@ function getMemberStats_() {
   return { total: sumCounts_(breakdown), sub: 'Across ' + breakdown.length + ' member types', breakdown: breakdown };
 }
 
-/** Online Applications - application row count grouped by Status. */
 function getApplicationStats_() {
   var ss = SpreadsheetApp.openById(HPAPI_CFG.membershipAppsId);
   var sheet = ss.getSheetByName(HPAPI_CFG.membershipSheetName || 'Membership Applications');
@@ -776,8 +721,8 @@ function getApplicationStats_() {
 
   var values = sheet.getDataRange().getValues();
   var start = (HPAPI_CFG.membershipDataStartRow || 8) - 1;
-  var statusCol = findHeader_(values[6] || values[0], ['status']); // headers live on row 7
-  if (statusCol === -1) statusCol = 1; // Column B fallback
+  var statusCol = findHeader_(values[6] || values[0], ['status']);
+  if (statusCol === -1) statusCol = 1; 
 
   var counts = {};
   var total = 0;
@@ -801,7 +746,6 @@ function getApplicationStats_() {
   };
 }
 
-/** Registered Boats - ClassMembers sheet grouped by ClassName, active boats only. */
 function getBoatStats_() {
   var ss = openSpreadsheet_(HPAPI_CFG.clubManagementId, HPAPI_CFG.clubManagementName);
   var sheet = ss.getSheetByName('ClassMembers');
@@ -809,17 +753,16 @@ function getBoatStats_() {
 
   var values = sheet.getDataRange().getValues();
   var classCol = findHeader_(values[0], ['classname', 'class']);
-  if (classCol === -1) classCol = 3; // ClassName is column D
+  if (classCol === -1) classCol = 3; 
 
   var activeCol = findHeader_(values[0], ['active']);
-  if (activeCol === -1) activeCol = 1; // Active is column B
+  if (activeCol === -1) activeCol = 1; 
 
   function isActive_(v) {
     return v === true || String(v).trim().toUpperCase() === 'TRUE' || String(v).trim() === 'Yes';
   }
 
-  // Filter to active rows only, then reuse countBy_ on the filtered set.
-  var activeRows = [values[0]]; // keep header row so countBy_'s startRow=1 still works
+  var activeRows = [values[0]]; 
   for (var r = 1; r < values.length; r++) {
     if (isActive_(values[r][activeCol])) activeRows.push(values[r]);
   }
@@ -828,7 +771,6 @@ function getBoatStats_() {
   return { total: sumCounts_(breakdown), sub: 'Across ' + breakdown.length + ' classes', breakdown: breakdown };
 }
 
-/** Financial Status - Members sheet grouped by the Paid up checkbox. */
 function getFinancialStats_() {
   var ss = openSpreadsheet_(HPAPI_CFG.clubManagementId, HPAPI_CFG.clubManagementName);
   var sheet = ss.getSheetByName('Members');
@@ -836,7 +778,7 @@ function getFinancialStats_() {
 
   var values = sheet.getDataRange().getValues();
   var paidCol = findHeader_(values[0], ['paidup', 'paid up', 'paid']);
-  if (paidCol === -1) paidCol = 6; // Paid Up is column G
+  if (paidCol === -1) paidCol = 6; 
 
   var activeCol = findHeader_(values[0], ['active']);
   var typeCol   = findHeader_(values[0], ['membership', 'membershiptype', 'membertype']);
@@ -851,7 +793,6 @@ function getFinancialStats_() {
     var memberIdentified = String(values[r][0]).trim() !== '' || String(values[r][2]).trim() !== '';
     if (!memberIdentified) continue;
 
-    // Only count active Full/Affiliate members — exclude Expired/Inactive rows.
     if (activeCol !== -1 && !isActive_(values[r][activeCol])) continue;
     if (typeCol !== -1) {
       var type = String(values[r][typeCol]).trim().toLowerCase();
