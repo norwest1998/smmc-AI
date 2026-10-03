@@ -206,20 +206,45 @@ function doGet(e) {
   return handleAction(action, params);
 }
 
-function doPost(e) {
+/* function doPost(e) {
   let payload = {};
   try {
     payload = e.postData && e.postData.contents ? JSON.parse(e.postData.contents) : {};
-    const action = payload.action || e.parameter.action;
-    return handleAction(action, payload);
+    const action = payload.action || (e.parameter ? e.parameter.action : undefined);
+    return handleAction(action, payload, e);
   } catch (err) {
       return ContentService.createTextOutput(JSON.stringify({ error: err.message }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+*/
 
+function doPost(e) {
+  let payload = {};
+  try {
+    const queryParams = (e && e.parameter) ? e.parameter : {};
+    let bodyParams = {};
+
+    if (e && e.postData && e.postData.contents) {
+      try {
+        bodyParams = JSON.parse(e.postData.contents);
+      } catch (jsonErr) {
+        // Fallback if content is form-encoded instead of JSON
+      }
+    }
+
+    // Merge URL query parameters with post body payload (body takes precedence)
+    payload = Object.assign({}, queryParams, bodyParams);
+    const action = payload.action;
+
+    return handleAction(action, payload, e);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
-function handleAction(action, payload) {
+function handleAction(action, payload,e) {
   try {
 
     const updates = payload.updates || payload.update || {};
@@ -229,6 +254,7 @@ function handleAction(action, payload) {
     const sheetName = payload.sheet || payload.sheetName;
     const ok = data => ContentService.createTextOutput(JSON.stringify({ success: true, data }))
       .setMimeType(ContentService.MimeType.JSON);
+console.log("Domain: " + payload.domain) 
     
     switch (action) {
       case "getRegistry": {
@@ -262,7 +288,25 @@ function handleAction(action, payload) {
     }
     
     if (!payload.domain) {
-      return json({ error: 'Missing required "domain" parameter for this action.' });
+      // 1. Build a detailed diagnostic report
+      const diagnosticInfo = {
+        timestamp: new Date().toISOString(),
+        actionRequested: action || "NONE_PROVIDED",
+        receivedPayloadKeys: Object.keys(payload),
+        fullPayloadReceived: payload
+      };
+      console.error("⚠️ Missing 'domain'. Full request details:", {
+        action: action,
+        queryString: e ? e.queryString : "N/A",
+        parameter: e ? e.parameter : {},
+        payload: payload
+      });
+
+      // 4. Return detailed debug context back to the caller
+      return json({ 
+        error: 'Missing required "domain" parameter for this action.',
+        debugContext: diagnosticInfo
+      });
     }
 
     if (action === "fetch") {
