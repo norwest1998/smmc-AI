@@ -1,14 +1,15 @@
 // --- CACHE UTILITIES FOR GATEWAY ---
 function putCachedData(key, string) {
   const cache = CacheService.getScriptCache();
-  const chunkSize = 90000;
+  const chunkSize = 30000;
   const chunks = Math.ceil(string.length / chunkSize);
+  if (chunks > 30) return;
   const data = {};
   data[key + '_chunks'] = String(chunks);
   for (let i = 0; i < chunks; i++) {
     data[key + '_' + i] = string.substring(i * chunkSize, (i + 1) * chunkSize);
   }
-  cache.putAll(data, 21600); // 6 hours
+  try { cache.putAll(data, 21600); } catch (e) { console.warn("Cache put failed:", e.message); }; // 6 hours
 }
 
 function getCachedData(key) {
@@ -27,7 +28,7 @@ function getCachedData(key) {
   return string;
 }
 
-function clearSheetCache(domain, sheetName) {
+function clearSheetCache(domain, sheetName, silent) {
   const cache = CacheService.getScriptCache();
   const key = 'SHEET_' + domain + '_' + sheetName;
   const chunksStr = cache.get(key + '_chunks');
@@ -39,7 +40,7 @@ function clearSheetCache(domain, sheetName) {
   }
   
   // Also force bust the Frontend's cache so changes appear instantly!
-  notifyFrontendCache();
+  if (!silent) notifyFrontendCache();
 }
 
 function getSheetDataCached(domain, sheetName) {
@@ -95,7 +96,7 @@ function refreshAdminCache() {
     if (sheets) {
       Object.keys(sheets).forEach(sheetName => {
         // Clear and aggressively fetch to keep perfectly warm
-        clearSheetCache(domain, sheetName);
+        clearSheetCache(domain, sheetName, true);
         getSheetDataCached(domain, sheetName);
       });
     }
@@ -103,6 +104,7 @@ function refreshAdminCache() {
 }
 
 // ── doGet ─────────────────────────────────────────────────────────
+const CONFIG_SPREADSHEET_ID = "1nRRzaJ_YBLZKyQbJ0oMQxg5ABRX-ODh3ioh-wVuQJSo"; 
 const REGISTRY = [
   {
     members: {
@@ -200,7 +202,7 @@ const REGISTRY = [
 
 function doGet(e) {
   const params = e ? e.parameter : {};
-  const action = params.action || "getRegistry";
+  const action = params.action;
   return handleAction(action, params);
 }
 
@@ -208,11 +210,13 @@ function doPost(e) {
   let payload = {};
   try {
     payload = e.postData && e.postData.contents ? JSON.parse(e.postData.contents) : {};
+    const action = payload.action || e.parameter.action;
+    return handleAction(action, payload);
   } catch (err) {
-    payload = e ? e.parameter : {};
+      return ContentService.createTextOutput(JSON.stringify({ error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
   }
-  const action = payload.action || (e ? e.parameter.action : "registerSchema");
-  return handleAction(action, payload);
+
 }
 
 function handleAction(action, payload) {
@@ -246,6 +250,8 @@ function handleAction(action, payload) {
             batchResults[req.domain + "|" + req.sheet] = getSheetDataCached(req.domain, req.sheet);
           } catch(err) {
             batchResults[req.domain + "|" + req.sheet] = [];
+            return ContentService.createTextOutput(JSON.stringify({ error: err.message }))
+               .setMimeType(ContentService.MimeType.JSON);
           }
         });
         return json({ success: true, results: batchResults });
@@ -409,6 +415,13 @@ function isValueChanged(before, after) {
   return strBefore !== strAfter;
 }
 
+function flushAllSheetCache() {
+  getSystemRegistry().forEach(entry => {
+    const d = Object.keys(entry)[0];
+    Object.keys(entry[d].sheets || {}).forEach(s => clearSheetCache(d, s, true));
+  });
+}
+
 // ── Audit Log ─────────────────────────────────────────────────────
 
 function auditLog(action, domain, sheetName, recordId, field, before, after, success) {
@@ -429,6 +442,7 @@ function auditLog(action, domain, sheetName, recordId, field, before, after, suc
       Success:    success
     };
     sh.appendRow(headers.map(h => entry[h] ?? ""));
+    clearSheetCache("audit", "AuditLog", true);
   } catch(e) {
     console.error("AuditLog failed:", e.message);
   }
@@ -530,11 +544,13 @@ function invalidateAndBumpRegistry() {
   
   const newVersion = Date.now().toString();
   PropertiesService.getScriptProperties().setProperty("SCHEMA_VERSION", newVersion);
+  try { generateVariableRegistry(); } catch (e) { console.warn(e); }
+  try { flushAllSheetCache(); } catch (e) { console.warn(e); }
   return newVersion;
 }
 
 function buildDynamicRegistryFromSheet() {
-  const CONFIG_SPREADSHEET_ID = "1nRRzaJ_YBLZKyQbJ0oMQxg5ABRX-ODh3ioh-wVuQJSo"; 
+  
   const ss = SpreadsheetApp.openById(CONFIG_SPREADSHEET_ID);
 
   const schemaSheet = ss.getSheetByName("SchemaRegistry");
@@ -585,7 +601,7 @@ function buildDynamicRegistryFromSheet() {
   Object.keys(domainMap).forEach(domainKey => {
     registryArray.push({ [domainKey]: domainMap[domainKey] });
   });
-  generateVariableRegistry();
+ 
   return registryArray;
 }
 
@@ -621,11 +637,13 @@ function upsertSchemaRegistry(payload) {
       const baseline = data[i][3] || cols;          
       const current  = data[i][2];
       const status   = (current && current !== cols) ? "DRIFT" : "OK";
+      
       sheet.getRange(i + 1, 1, 1, 7).setValues([[domain, sheetName, cols, baseline, rowCount, now, status]]);
-      if (current !== cols) { invalidateAndBumpRegistry(); }   // was unconditional + getSystemRegistry(true)
-      return { ok: true, status };
-      invalidateAndBumpRegistry();
-      getSystemRegistry(true);
+      
+      if (current !== cols) { 
+          invalidateAndBumpRegistry(); 
+      }
+      
       return { ok: true, status };
     }
   }
@@ -633,6 +651,7 @@ function upsertSchemaRegistry(payload) {
   sheet.appendRow([domain, sheetName, cols, cols, rowCount, now, "OK"]);
   return { ok: true, status: "OK" };
 }
+
 
 function resetSchemaBaseline(domain, sheetName) {
   const regSheet = setupSchemaRegistry();
@@ -690,8 +709,7 @@ function findResults(domain, sheetName, filtersArray) {
 }
 
 function generateVariableRegistry() {
-  const entry = getRegistryEntry("audit");
-  const ss = SpreadsheetApp.openById(entry.spreadsheetId);
+  const ss = SpreadsheetApp.openById(CONFIG_SPREADSHEET_ID);
   let sheet = ss.getSheetByName("VariableRegistry");
 
   const schemaSheet = ss.getSheetByName('SchemaRegistry');
