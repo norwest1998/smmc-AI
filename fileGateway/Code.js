@@ -29,7 +29,7 @@ function doPost(e) {
         switch (body.action) {
             case "listFolder":        return listFolder(body.folder);
             case "readFile":          return readFile(body.fileId);
-            case "triggerProcessing": {
+            case "triggerResults": {
                 const msg = triggerProcessing();   // must exist in this project
                 return respond({ message: typeof msg === "string" ? msg : "Processing triggered." });
             }
