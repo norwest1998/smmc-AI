@@ -276,7 +276,7 @@ function getRegistryHeaders(domain, sheetName) {
 // ── Layout Scraper ───────────────────────────────────────────────────
 function getSheetLayout(domain, sheetName) {
   const entry = getRegistryEntry(domain);
-  const ss = entry.spreadsheetId;
+  const ss = SpreadsheetApp.openByIdB(entry.spreadsheetId);
   const sheet = ss.getSheetByName(sheetName);
 
   if (!sheet) {
