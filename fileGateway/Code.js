@@ -24,15 +24,18 @@ function doGet(e) {
 }
 
 function doPost(e) {
-    const body   = JSON.parse(e.postData.contents);
-    const action = body.action;
-
     try {
-        switch (action) {
-            case "listFolder": return listFolder(folderKey);
-            case "readFile":   return readFile(fileId);
+        const body = JSON.parse(e.postData.contents);
+        switch (body.action) {
+            case "listFolder":        return listFolder(body.folder);
+            case "readFile":          return readFile(body.fileId);
+            case "triggerProcessing": {
+                const msg = triggerProcessing();   // must exist in this project
+                return respond({ message: typeof msg === "string" ? msg : "Processing triggered." });
+            }
+            default: return respond({ error: "Unknown action: " + body.action });
         }
-    } catch(err) {
+    } catch (err) {
         return respond({ error: err.message });
     }
 }

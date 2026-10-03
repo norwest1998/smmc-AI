@@ -1,3 +1,107 @@
+// --- CACHE UTILITIES FOR GATEWAY ---
+function putCachedData(key, string) {
+  const cache = CacheService.getScriptCache();
+  const chunkSize = 90000;
+  const chunks = Math.ceil(string.length / chunkSize);
+  const data = {};
+  data[key + '_chunks'] = String(chunks);
+  for (let i = 0; i < chunks; i++) {
+    data[key + '_' + i] = string.substring(i * chunkSize, (i + 1) * chunkSize);
+  }
+  cache.putAll(data, 21600); // 6 hours
+}
+
+function getCachedData(key) {
+  const cache = CacheService.getScriptCache();
+  const chunksStr = cache.get(key + '_chunks');
+  if (!chunksStr) return null;
+  const chunks = parseInt(chunksStr, 10);
+  const keys = [];
+  for (let i = 0; i < chunks; i++) keys.push(key + '_' + i);
+  const data = cache.getAll(keys);
+  let string = '';
+  for (let i = 0; i < chunks; i++) {
+    if (typeof data[key + '_' + i] === 'undefined') return null;
+    string += data[key + '_' + i];
+  }
+  return string;
+}
+
+function clearSheetCache(domain, sheetName) {
+  const cache = CacheService.getScriptCache();
+  const key = 'SHEET_' + domain + '_' + sheetName;
+  const chunksStr = cache.get(key + '_chunks');
+  if (chunksStr) {
+    const chunks = parseInt(chunksStr, 10);
+    const keys = [key + '_chunks'];
+    for (let i = 0; i < chunks; i++) keys.push(key + '_' + i);
+    cache.removeAll(keys);
+  }
+  
+  // Also force bust the Frontend's cache so changes appear instantly!
+  notifyFrontendCache();
+}
+
+function getSheetDataCached(domain, sheetName) {
+  const cacheKey = 'SHEET_' + domain + '_' + sheetName;
+  const cachedStr = getCachedData(cacheKey);
+  if (cachedStr) {
+    try { return JSON.parse(cachedStr); } catch(e) { console.warn("Cache parse failed."); }
+  }
+  
+  const sheet = getSheet(domain, sheetName);
+  const allValues = sheet.getDataRange().getValues();
+  const config = getSheetConfig(domain, sheetName);
+  const headerRow = (config?.headerRow ?? 1) - 1;
+  const headers = config?.headers ?? allValues[headerRow].map(h => String(h).trim());
+  const dataRows = allValues.slice(headerRow + 1);
+  const objects = rowsToObjects(headers, dataRows, false);
+  
+  putCachedData(cacheKey, JSON.stringify(objects));
+  return objects;
+}
+
+function notifyFrontendCache() {
+  try {
+    // Calling the API endpoint mapped to index.html (Code.js)
+    const HOME_DATA_API = "https://script.google.com/macros/s/AKfycbzGgNMh8KNWYquGuOoGvmrasDR5npiPoNXTouuzVeY9sRwrhDo29BVDbWGrh_FfgoieXQ/exec";
+    UrlFetchApp.fetch(HOME_DATA_API + "?action=clearCache", { muteHttpExceptions: true });
+  } catch (e) {
+    console.warn("Failed to notify frontend API cache", e);
+  }
+}
+
+// --- SCHEDULED TRIGGER ---
+function setupAdminCacheTrigger() {
+  const triggers = ScriptApp.getProjectTriggers();
+  for (let i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'refreshAdminCache') {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+  ScriptApp.newTrigger('refreshAdminCache')
+           .timeBased()
+           .everyHours(5)
+           .create();
+  
+  refreshAdminCache();
+}
+
+function refreshAdminCache() {
+  const registry = getSystemRegistry();
+  registry.forEach(entry => {
+    const domain = Object.keys(entry)[0];
+    const sheets = entry[domain].sheets;
+    if (sheets) {
+      Object.keys(sheets).forEach(sheetName => {
+        // Clear and aggressively fetch to keep perfectly warm
+        clearSheetCache(domain, sheetName);
+        getSheetDataCached(domain, sheetName);
+      });
+    }
+  });
+}
+
 // ── doGet ─────────────────────────────────────────────────────────
 const REGISTRY = [
   {
@@ -88,7 +192,7 @@ const REGISTRY = [
       spreadsheetId: "1C7n5b1RZ1YCoQ3HHbZQ-UerJLbSfnZ_VYJnQ_CKr-XQ",
       defaultSheet: "GuestRegistrations",
       sheets: {
-        AvgScrReq: {key: "HexKey", headerRow: 1,headers: ["HexKey", "EventID", "EventTitle", "EventDate", "RaceClass", "SailNo", "CompetitorName", "HomeClub", "ContactEmail", "RegisteredAt", "Status"]}
+        GuestRegistrations: {key: "HexKey", headerRow: 1,headers: ["HexKey", "EventID", "EventTitle", "EventDate", "RaceClass", "SailNo", "CompetitorName", "HomeClub", "ContactEmail", "RegisteredAt", "Status"]}
       }
     }
   }
@@ -130,15 +234,6 @@ function handleAction(action, payload) {
       case "registerSchema":
         return ok(upsertSchemaRegistry(payload));
 
-      case "listFolder":
-        return listDriveFolder(payload.folderId);
-      
-      case "readFile":
-        return readDriveFile(payload.fileId);
-
-      case "triggerProcessing":
-        return triggerResultsScheduler();
-
       case "batchFetch":
         if (!payload.requests) {
           return  json({ error: "Missing 'requests' parameter" });
@@ -147,18 +242,16 @@ function handleAction(action, payload) {
         const batchResults = {};
         batchReqs.forEach(req => {
           try {
-            const bSheet = getSheet(req.domain, req.sheet);
-            const bAllValues = bSheet.getDataRange().getValues();
-            const bConfig = getSheetConfig(req.domain, req.sheet);
-            const bHeaderRow = (bConfig?.headerRow ?? 1) - 1;
-            const bHeaders = bConfig?.headers ?? bAllValues[bHeaderRow].map(h => String(h).trim());
-            const bDataValues = bAllValues.slice(bHeaderRow + 1);
-            batchResults[req.domain + "|" + req.sheet] = rowsToObjects(bHeaders, bDataValues, false);
+            // Highly optimized: pulls completely from Apps Script's cache
+            batchResults[req.domain + "|" + req.sheet] = getSheetDataCached(req.domain, req.sheet);
           } catch(err) {
             batchResults[req.domain + "|" + req.sheet] = [];
           }
         });
         return json({ success: true, results: batchResults });
+        
+      case "appendAvgScrReq":
+        return appendAverageScoreRequest("appendAvgScrReq", domain, sheetName, rowData);
 
     }
     
@@ -166,33 +259,35 @@ function handleAction(action, payload) {
       return json({ error: 'Missing required "domain" parameter for this action.' });
     }
 
-console.log("Domina: " + domain + "Payload: " + payload.domain + " Sheet: " + sheetName);
+    if (action === "fetch") {
+      return json({ values: getSheetDataCached(domain, sheetName) });
+    }
 
+    if (action === "layout") {
+      return json({success: true, domain: domain, sheetName: sheetName, layout: getSheetLayout(domain, sheetName)});
+    }
+
+    // --- BELOW LOGIC EXCLUSIVELY FIRES FOR WRITE (UPDATE/DELETE/APPEND) OPERATIONS ---
+    // (Bypassed entirely by read-only calls to conserve quota/speed)
+    
     const sheet       = getSheet(domain, sheetName);
     const allValues   = sheet.getDataRange().getValues();
     const config      = getSheetConfig(domain, sheetName);
-    const headerRow   = (config?.headerRow ?? 1) - 1;           // 0-based index
+    const headerRow   = (config?.headerRow ?? 1) - 1;           
     const regHeaders  = config?.headers ?? null;
     const keyField    = getKeyField(domain, sheetName);
     const headers     = regHeaders ?? allValues[headerRow].map(h => String(h).trim());
-    const dataRows    = allValues.slice(headerRow + 1);         // rows after header
+    const dataRows    = allValues.slice(headerRow + 1);         
     const keyCol      = headers.indexOf(keyField);        
 
-    let rows = null;
-
     switch (action) {
-      case "layout":
-        const layout = getSheetLayout(domain, sheetName);
-        return json({success: true, domain: domain, sheetName: sheetName, layout: layout});
-
-      case "fetch":
-        rows = rowsToObjects(headers, dataRows, false);
-        return json({ values: rows });
-
       case "append":
         const row = headers.map(h => rowData[h] ?? "");
         sheet.appendRow(row);
         if (domain !== "audit") auditLog("append", domain, sheetName, rowData[keyField] ?? "", "", "", rowData, "Success");
+        
+        // Instant invalidation
+        clearSheetCache(domain, sheetName);
         return json({ success: true });
 
       case "update":
@@ -202,16 +297,16 @@ console.log("Domina: " + domain + "Payload: " + payload.domain + " Sheet: " + sh
 
         const dataRowIndex = dataRows.findIndex(r => String(r[keyCol]).trim() === String(hexKey).trim());
         if (dataRowIndex === -1) return json({ error: `Record not found for key: ${hexKey}` });
-        const sheetRowNumber = dataRowIndex + headerRow + 2;  // +1 for 1-based, +1 to skip header row
+        const sheetRowNumber = dataRowIndex + headerRow + 2;  
 
         if (action === "delete") {
           const before = Object.fromEntries(headers.map((h, i) => [h, dataRows[dataRowIndex][i]]));
           sheet.deleteRow(sheetRowNumber);
           if (domain !== "audit") auditLog("delete", domain, sheetName, hexKey, "", before, "", "Success");
+          clearSheetCache(domain, sheetName);
           return json({ success: true });
         } 
 
-        // update — only modify cell & audit log if the value actually changed
         let updatedCount = 0;
         Object.entries(updates).forEach(([field, value]) => {
           const col = headers.indexOf(field);
@@ -225,6 +320,10 @@ console.log("Domina: " + domain + "Payload: " + payload.domain + " Sheet: " + sh
             updatedCount++;
           }
         });
+        
+        if (updatedCount > 0) {
+            clearSheetCache(domain, sheetName);
+        }
         return json({ success: true, updatedCount });
 
       default:
@@ -276,7 +375,7 @@ function getRegistryHeaders(domain, sheetName) {
 // ── Layout Scraper ───────────────────────────────────────────────────
 function getSheetLayout(domain, sheetName) {
   const entry = getRegistryEntry(domain);
-  const ss = SpreadsheetApp.openByIdB(entry.spreadsheetId);
+  const ss = SpreadsheetApp.openById(entry.spreadsheetId);
   const sheet = ss.getSheetByName(sheetName);
 
   if (!sheet) {
@@ -372,6 +471,9 @@ function appendAverageScoreRequest(action, domain, sheet, rowData) {
   avgSheet.appendRow(newRow);
   auditLog("append", domain, "AvgScrReq", rowData.requestId, `${action} by ${rowData.memberName}`, "", rowData, "Success");
 
+  // Invalidate Cache 
+  clearSheetCache(domain, "AvgScrReq");
+
   return ContentService.createTextOutput(JSON.stringify({
     status: "success",
     message: "Request successfully created.",
@@ -394,7 +496,6 @@ function getSystemRegistry(forceRefresh) {
   
   const currentVersion = scriptProps.getProperty(VERSION_KEY) || "0";
 
-  // Return cached payload only if forceRefresh is false AND version matches
   if (!isForce) {
     const cachedStr = cache.get(CACHE_KEY);
     if (cachedStr) {
@@ -409,11 +510,8 @@ function getSystemRegistry(forceRefresh) {
     }
   }
 
-
   const registry = buildDynamicRegistryFromSheet(); 
 
-
-  // Cache fresh registry alongside current version checksum
   try {
     cache.put(CACHE_KEY, JSON.stringify({
       _version: currentVersion,
@@ -436,7 +534,6 @@ function invalidateAndBumpRegistry() {
 }
 
 function buildDynamicRegistryFromSheet() {
-  // Hardcode JUST the ID of the master CONFIG sheet (Audit Trail)
   const CONFIG_SPREADSHEET_ID = "1nRRzaJ_YBLZKyQbJ0oMQxg5ABRX-ODh3ioh-wVuQJSo"; 
   const ss = SpreadsheetApp.openById(CONFIG_SPREADSHEET_ID);
 
@@ -449,9 +546,9 @@ function buildDynamicRegistryFromSheet() {
   const domainIdx = headers.indexOf("domain");
   const sheetIdx = headers.indexOf("sheet");
   const colsIdx = headers.indexOf("columns");
-  const ssIdIdx = headers.indexOf("spreadsheetid"); // New column in sheet
-  const keyIdx = headers.indexOf("key field");      // New column in sheet
-  const headerRowIdx = headers.indexOf("header row"); // New column in sheet
+  const ssIdIdx = headers.indexOf("spreadsheetid"); 
+  const keyIdx = headers.indexOf("key field");      
+  const headerRowIdx = headers.indexOf("header row"); 
 
   const registryArray = [];
   const domainMap = {};
@@ -479,13 +576,12 @@ function buildDynamicRegistryFromSheet() {
     }
 
     domainMap[domain].sheets[sheetName] = {
-      key: keyCol || columns[0], // Fallback to first col if blank
+      key: keyCol || columns[0], 
       headerRow: headerRow,
       headers: columns
     };
   }
   
-  // Format exactly how the original const REGISTRY was formatted
   Object.keys(domainMap).forEach(domainKey => {
     registryArray.push({ [domainKey]: domainMap[domainKey] });
   });
@@ -525,10 +621,9 @@ function upsertSchemaRegistry(payload) {
       const baseline = data[i][3] || cols;          
       const current  = data[i][2];
       const status   = (current && current !== cols) ? "DRIFT" : "OK";
-
-      sheet.getRange(i + 1, 1, 1, 7).setValues([[
-        domain, sheetName, cols, baseline, rowCount, now, status
-      ]]);
+      sheet.getRange(i + 1, 1, 1, 7).setValues([[domain, sheetName, cols, baseline, rowCount, now, status]]);
+      if (current !== cols) { invalidateAndBumpRegistry(); }   // was unconditional + getSystemRegistry(true)
+      return { ok: true, status };
       invalidateAndBumpRegistry();
       getSystemRegistry(true);
       return { ok: true, status };
