@@ -1,5 +1,5 @@
 // ── doGet ─────────────────────────────────────────────────────────
-const OLDREGISTRY = [
+const REGISTRY = [
   {
     members: {
       spreadsheetId: "1nFqeV1U0c_RLaZK4amf7QR1MMwB9q8gZLc4HriUH9iI",
@@ -113,38 +113,74 @@ function doPost(e) {
 
 function handleAction(action, payload) {
   try {
-    let result;
 
     const updates = payload.updates || payload.update || {};
     const rowData = payload.rowData || {};
     const domain = payload.domain;
     const hexKey = payload.hexKey;
     const sheetName = payload.sheet || payload.sheetName;
+    const ok = data => ContentService.createTextOutput(JSON.stringify({ success: true, data }))
+      .setMimeType(ContentService.MimeType.JSON);
+    
+    switch (action) {
+      case "getRegistry": {
+        const forceRefresh = payload.forceRefresh === true || payload.forceRefresh === "true";
+        return ok(getSystemRegistry(forceRefresh));
+      }
+      case "registerSchema":
+        return ok(upsertSchemaRegistry(payload));
+
+      case "listFolder":
+        return listDriveFolder(payload.folderId);
+      
+      case "readFile":
+        return readDriveFile(payload.fileId);
+
+      case "triggerProcessing":
+        return triggerResultsScheduler();
+
+      case "batchFetch":
+        if (!payload.requests) {
+          return  json({ error: "Missing 'requests' parameter" });
+        }
+        const batchReqs = typeof payload.requests === "string" ? JSON.parse(payload.requests) : payload.requests;
+        const batchResults = {};
+        batchReqs.forEach(req => {
+          try {
+            const bSheet = getSheet(req.domain, req.sheet);
+            const bAllValues = bSheet.getDataRange().getValues();
+            const bConfig = getSheetConfig(req.domain, req.sheet);
+            const bHeaderRow = (bConfig?.headerRow ?? 1) - 1;
+            const bHeaders = bConfig?.headers ?? bAllValues[bHeaderRow].map(h => String(h).trim());
+            const bDataValues = bAllValues.slice(bHeaderRow + 1);
+            batchResults[req.domain + "|" + req.sheet] = rowsToObjects(bHeaders, bDataValues, false);
+          } catch(err) {
+            batchResults[req.domain + "|" + req.sheet] = [];
+          }
+        });
+        return json({ success: true, results: batchResults });
+
+    }
+    
+    if (!payload.domain) {
+      return json({ error: 'Missing required "domain" parameter for this action.' });
+    }
+
 console.log("Domina: " + domain + "Payload: " + payload.domain + " Sheet: " + sheetName);
 
-      const sheet       = getSheet(domain, sheetName);
-      const allValues   = sheet.getDataRange().getValues();
-      const config      = getSheetConfig(domain, sheetName);
-      const headerRow   = (config?.headerRow ?? 1) - 1;           // 0-based index
-      const regHeaders  = config?.headers ?? null;
-      const keyField    = getKeyField(domain, sheetName);
-      const headers     = regHeaders ?? allValues[headerRow].map(h => String(h).trim());
-      const dataRows    = allValues.slice(headerRow + 1);         // rows after header
-      const keyCol      = headers.indexOf(keyField);        
+    const sheet       = getSheet(domain, sheetName);
+    const allValues   = sheet.getDataRange().getValues();
+    const config      = getSheetConfig(domain, sheetName);
+    const headerRow   = (config?.headerRow ?? 1) - 1;           // 0-based index
+    const regHeaders  = config?.headers ?? null;
+    const keyField    = getKeyField(domain, sheetName);
+    const headers     = regHeaders ?? allValues[headerRow].map(h => String(h).trim());
+    const dataRows    = allValues.slice(headerRow + 1);         // rows after header
+    const keyCol      = headers.indexOf(keyField);        
 
     let rows = null;
 
     switch (action) {
-      case "getRegistry":
-        const forceRefresh = payload.forceRefresh === true || payload.forceRefresh === "true";
-        result = getSystemRegistry(forceRefresh);
-        break;
-
-      case "registerSchema":
-        // ACTION 1 & 3: Save schema, invalidate cache, and bump version checksum
-        result = upsertSchemaRegistry(payload);
-        break;
-
       case "layout":
         const layout = getSheetLayout(domain, sheetName);
         return json({success: true, domain: domain, sheetName: sheetName, layout: layout});
@@ -191,45 +227,9 @@ console.log("Domina: " + domain + "Payload: " + payload.domain + " Sheet: " + sh
         });
         return json({ success: true, updatedCount });
 
-      case "listFolder":
-        return listDriveFolder(payload.folderId);
-      
-      case "readFile":
-        return readDriveFile(payload.fileId);
-
-      case "triggerProcessing":
-        return triggerResultsScheduler();
-
-      case "batchFetch":
-        if (!payload.requests) {
-          result =  json({ error: "Missing 'requests' parameter" });
-          break;
-        }
-        const batchReqs = typeof payload.requests === "string" ? JSON.parse(payload.requests) : payload.requests;
-        const batchResults = {};
-        batchReqs.forEach(req => {
-          try {
-            const bSheet = getSheet(req.domain, req.sheet);
-            const bAllValues = bSheet.getDataRange().getValues();
-            const bConfig = getSheetConfig(req.domain, req.sheet);
-            const bHeaderRow = (bConfig?.headerRow ?? 1) - 1;
-            const bHeaders = bConfig?.headers ?? bAllValues[bHeaderRow].map(h => String(h).trim());
-            const bDataValues = bAllValues.slice(bHeaderRow + 1);
-            batchResults[req.domain + "|" + req.sheet] = rowsToObjects(bHeaders, bDataValues, false);
-          } catch(err) {
-            batchResults[req.domain + "|" + req.sheet] = [];
-          }
-        });
-        return json({ results: batchResults });
-
       default:
         throw new Error("Invalid or unsupported action: " + action);
     }
-    if (!payload.domain) {
-      return json({ error: 'Missing required "domain" parameter for this action.' });
-    }
-    return ContentService.createTextOutput(JSON.stringify({ success: true, data: result }))
-      .setMimeType(ContentService.MimeType.JSON);
 
   } catch (error) {
     return ContentService.createTextOutput(JSON.stringify({ success: false, error: error.toString() }))
@@ -409,13 +409,9 @@ function getSystemRegistry(forceRefresh) {
     }
   }
 
-  // =========================================================
-  // YOUR EXISTING REGISTRY BUILD LOGIC HERE
-  // =========================================================
-  // Keep whatever getSystemRegistry() currently executes 
-  // (e.g., buildDynamicRegistryFromSheet(), loading sheets, parsing domains)
+
   const registry = buildDynamicRegistryFromSheet(); 
-  // =========================================================
+
 
   // Cache fresh registry alongside current version checksum
   try {
@@ -493,7 +489,7 @@ function buildDynamicRegistryFromSheet() {
   Object.keys(domainMap).forEach(domainKey => {
     registryArray.push({ [domainKey]: domainMap[domainKey] });
   });
-
+  generateVariableRegistry();
   return registryArray;
 }
 
@@ -596,76 +592,6 @@ function findResults(domain, sheetName, filtersArray) {
   });
 
   return rowsToObjects(rawHeaders.map(h => String(h).trim()), filteredRows, false);
-}
-
-function validateRegistryAgainstLiveSheets() {
-  const entry = getRegistryEntry("audit");
-  const ss = SpreadsheetApp.openById(entry.spreadsheetId);
-  const auditSheet = ss.getSheetByName('SchemaRegistry');
-  if (!auditSheet) throw new Error("SchemaRegistry sheet not found.");
-
-  const now = new Date().toISOString();
-  const results = [];
-
-  REGISTRY.forEach(domainObj => {
-    const domainKey = Object.keys(domainObj)[0];
-    const domainInfo = domainObj[domainKey];
-    
-    let targetSs;
-    try {
-      targetSs = SpreadsheetApp.openById(domainInfo.spreadsheetId);
-    } catch (e) {
-      Logger.log(`Failed to open spreadsheet for domain: ${domainKey}`);
-      return;
-    }
-
-    Object.keys(domainInfo.sheets).forEach(sheetName => {
-      const sheetConfig = domainInfo.sheets[sheetName];
-      const gSheet = targetSs.getSheetByName(sheetName);
-
-      if (!gSheet) {
-        results.push([domainKey, sheetName, "[]", JSON.stringify(sheetConfig.headers), 0, now, "ERROR: Sheet Missing"]);
-        return;
-      }
-
-      const headerRowIndex = sheetConfig.headerRow || 1;
-      const lastCol = gSheet.getLastColumn();
-      const lastRow = gSheet.getLastRow();
-      
-      let liveHeaders = [];
-      if (lastCol > 0 && lastRow >= headerRowIndex) {
-        liveHeaders = gSheet.getRange(headerRowIndex, 1, 1, lastCol)
-                            .getValues()[0]
-                            .map(h => String(h).trim())
-                            .filter(h => h !== '');
-      }
-
-      const expectedHeaders = sheetConfig.headers || [];
-      const isDrift = JSON.stringify(liveHeaders) !== JSON.stringify(expectedHeaders);
-      const status = isDrift ? 'DRIFT' : 'OK';
-
-      results.push([
-        domainKey,
-        sheetName,
-        JSON.stringify(liveHeaders),
-        JSON.stringify(expectedHeaders),
-        Math.max(0, lastRow - headerRowIndex),
-        now,
-        status
-      ]);
-    });
-  });
-
-  const headers = ["Domain", "Sheet", "Columns", "Baseline Columns", "Row Count", "Last Checked", "Status"];
-  auditSheet.clear();
-  auditSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  
-  if (results.length > 0) {
-    auditSheet.getRange(2, 1, results.length, headers.length).setValues(results);
-  }
-
-  generateVariableRegistry();
-  Logger.log(`Validation complete. Processed ${results.length} sheets.`);
 }
 
 function generateVariableRegistry() {
