@@ -333,6 +333,15 @@ console.log("Domain: " + payload.domain)
     switch (action) {
       case "append":
         const row = headers.map(h => rowData[h] ?? "");
+        if (sheetName === "Event Data") {
+          const r = sheet.getLastRow();
+          const colOf = n => headers.findIndex(h => String(h).trim() === n) + 1;
+          const cl = String.fromCharCode(64 + colOf("Class"));          // G
+          sheet.getRange(r, colOf("Emblem")).setFormula(
+            `=IF(ISNA(VLOOKUP($${cl}${r},Attributes!$A$2:$B$7,2,FALSE)),Attributes!$C$1,VLOOKUP($${cl}${r},Attributes!$A$2:$B$7,2,FALSE))`);
+          const [y, m, d] = String(rowData.Date).split("/").map(Number);
+          sheet.getRange(r, colOf("Date")).setValue(new Date(y, m - 1, d)).setNumberFormat("yyyy/mm/dd");
+        }
         sheet.appendRow(row);
         if (domain !== "audit") auditLog("append", domain, sheetName, rowData[keyField] ?? "", "", "", rowData, "Success");
         
