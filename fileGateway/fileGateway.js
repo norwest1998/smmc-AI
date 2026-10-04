@@ -29,7 +29,7 @@ function doPost(e) {
         switch (body.action) {
             case "listFolder":        return listFolder(body.folder);
             case "readFile":          return readFile(body.fileId);
-            case "triggerResults": {
+            case "triggerProcessing": {
                 const msg = triggerProcessing();   // must exist in this project
                 return respond({ message: typeof msg === "string" ? msg : "Processing triggered." });
             }
@@ -86,34 +86,21 @@ function readFile(fileId) {
     }
 }
 
-function oldreadFile(fileId) {
-    if (!fileId) return respond({ error: "fileId required" });
-    const file = DriveApp.getFileById(fileId);
-    const mimeType = file.getMimeType();
-
-    if (mimeType === MimeType.GOOGLE_SHEETS) {
-        // Export first sheet as CSV via Drive export URL
-        const exportUrl = `https://docs.google.com/spreadsheets/d/${fileId}/export?format=csv&gid=0`;
-        const response  = UrlFetchApp.fetch(exportUrl, {
-            headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }
-        });
-        const csv  = response.getContentText();
-        // A1 is the first cell of the first row
-        const a1   = csv.split('\n')[0].split(',')[0].trim().replace(/^"|"$/g, '');
-        try {
-            const content = JSON.parse(a1);
-            return respond({ content });
-        } catch(e) {
-            return respond({ error: "A1 content is not valid JSON: " + e.message });
-        }
-    }
-
-    // Raw blob fallback
+function uploadFile(folderKey, filename, content) {
     try {
-        const content = JSON.parse(file.getBlob().getDataAsString('UTF-8'));
-        return respond({ content });
-    } catch(e) {
-        return respond({ error: "File is not valid JSON: " + e.message });
+        const folderId = FOLDERS[folderKey] || folderKey;
+        const folder = DriveApp.getFolderById(folderId);
+        
+        // Convert to string safely if object is passed 
+        const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
+        
+        // Create the file natively (application/json) 
+        const blob = Utilities.newBlob(contentStr, 'application/json', filename);
+        const file = folder.createFile(blob);
+        
+        return respond({ success: true, fileId: file.getId(), url: file.getUrl() });
+    } catch (err) {
+        return respond({ error: err.message });
     }
 }
 
