@@ -269,3 +269,79 @@ function getRoundIndexForEvent(bookID, eventID, roundCount) {
   if (!roundNumber) return -1;
   return roundNumber - 1; // 0-based
 }
+
+function sheetToObjects(ss, sheetName, keys) {
+  try {
+    const sh = ss.getSheetByName(sheetName);
+    if (!sh) return [];
+    const data = sh.getDataRange().getValues();
+    if (data.length < 2) return [];
+    const results = [];
+    for (let r=1;r<data.length;r++) {
+      const row = data[r];
+      const obj = {};
+      for (let i=0;i<keys.length;i++) obj[keys[i]] = row[i] !== undefined ? (row[i]===''? null: row[i]) : null;
+      results.push(obj);
+    }
+    return results;
+  } catch (e) {
+    Logger.log('sheetToObjects error: ' + e);
+    return [];
+  }
+}
+
+/**
+ * Updates Column D (Status) to "PROCESSED" for a given row index.
+ * 
+ * @param {number} rowIndex - 1-based row index returned by getNextUnprocessedEvent
+ * @param {string} spreadsheetId - The ID of your Google Sheet.
+ * @param {string} sheetName - Tab name (default: 'Calendar').
+ */
+function markCalendarEventProcessed(eventId) {
+  const cfg = getConfig();
+  const spreadsheetId = cfg.calendarSpreadsheetId;
+  const sheetName = 'Event Data';
+
+  try {
+    const ss = SpreadsheetApp.openById(spreadsheetId);
+    const sheet = ss.getSheetByName(sheetName);
+    
+    const data = sheet.getDataRange().getValues(); 
+    const targetId = String(eventId).trim();
+
+    // Iterate through rows (skip header row)
+    for (let i = 1; i < data.length; i++) {
+      const rowEventId = String(data[i][0]).trim(); // Column A (Index 0)
+
+      if (rowEventId === targetId) {
+        // Update Column O (Index 15) -> Status
+        sheet.getRange(i + 1, 15).setValue('Processed');
+        Logger.log(`Successfully marked Event ID "${eventId}" as Processed at Row ${i + 1}.`);
+        return true;
+      }
+    }    
+    Logger.log(`Event ID "${eventId}" was not found in sheet "${sheetName}".`);
+    return false;
+  } catch (error) {
+    Logger.log(`Error updating calendar for Event ID "${eventId}": ` + error.toString());
+    // Throw error so the webhook transaction catches it and rolls back the sheets
+    throw new Error(`Calendar Update Failed: ${error.message}`); 
+  }
+}
+
+function archiveProcessedFile(fileId, archiveFolderId) {
+  try {
+    const file = DriveApp.getFileById(fileId);
+    const archiveFolder = DriveApp.getFolderById(archiveFolderId);
+    file.moveTo(archiveFolder);
+    Logger.log(`Moved ${file.getName()} to archive.`);
+    file.setName(file.getName());
+    const newDescription = `Processed by SMMC Admin AI ` + formatDate(new Date());
+    file.setDescription(newDescription);
+    Logger.log(`File description updated for processing flag: ${file.getName()}`);
+  } catch (e) {
+    Logger.log('Error archiving file: ' + e.toString());
+    // Throw error so the webhook transaction catches it and rolls back the sheets
+    throw new Error(`Archiving Failed: ${e.message}`); 
+  }
+}
