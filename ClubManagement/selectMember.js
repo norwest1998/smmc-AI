@@ -86,7 +86,7 @@ function getClassMembersList(className) {
           });          
         } 
       } else {
-        if (row[3] === className) {
+        if (row[3] === "All" || row[3] === className) {
           members.push({
               id: row[0],
               active: row[1], 
