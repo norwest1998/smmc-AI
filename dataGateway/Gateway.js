@@ -103,6 +103,33 @@ function refreshAdminCache() {
   });
 }
 
+function MANUAL_ResetSystemCache() {
+  const cache = CacheService.getScriptCache();
+  
+  // 1. Clear the main System Registry (Schema) Cache
+  cache.remove("SYSTEM_REGISTRY_CACHE");
+  
+  // 2. Bump the schema version so the frontend knows to fetch fresh data
+  const newVersion = Date.now().toString();
+  PropertiesService.getScriptProperties().setProperty("SCHEMA_VERSION", newVersion);
+  
+  // 3. Flush all individual sheet data caches
+  try { 
+    flushAllSheetCache(); 
+  } catch(e) {
+    Logger.log("Note: Minor error flushing sheet data, but schema was reset.");
+  }
+  
+  // 4. Force rebuild the Variable Registry
+  try { 
+    generateVariableRegistry(); 
+  } catch (e) {
+    Logger.log("Note: Minor error generating variable registry.");
+  }
+  
+  Logger.log("✅ SUCCESS: All caches cleared! The schema has been reset to version: " + newVersion);
+}
+
 // ── doGet ─────────────────────────────────────────────────────────
 const CONFIG_SPREADSHEET_ID = "1nRRzaJ_YBLZKyQbJ0oMQxg5ABRX-ODh3ioh-wVuQJSo"; 
 const REGISTRY = [
@@ -254,9 +281,17 @@ function handleAction(action, payload,e) {
     const sheetName = payload.sheet || payload.sheetName;
     const ok = data => ContentService.createTextOutput(JSON.stringify({ success: true, data }))
       .setMimeType(ContentService.MimeType.JSON);
-console.log("Domain: " + payload.domain + " payload: " + payload) 
+ 
     
     switch (action) {
+      case "aryaResults":
+        return respond(JSON.parse(UrlFetchApp.fetch(
+                  "https://mysailingresults.com/api/results/get_results.php?eventid=" + encodeURIComponent(payload.eventId)
+                ).getContentText()));
+
+      case "refreshCache": 
+        return ok(MANUAL_ResetSystemCache());
+      
       case "getRegistry": {
         const forceRefresh = payload.forceRefresh === true || payload.forceRefresh === "true";
         return ok(getSystemRegistry(forceRefresh));
