@@ -194,7 +194,7 @@ const REGISTRY = [
       spreadsheetId: "1C7n5b1RZ1YCoQ3HHbZQ-UerJLbSfnZ_VYJnQ_CKr-XQ",
       defaultSheet: "GuestRegistrations",
       sheets: {
-        GuestRegistrations: {key: "HexKey", headerRow: 1,headers: ["HexKey", "EventID", "EventTitle", "EventDate", "RaceClass", "SailNo", "CompetitorName", "HomeClub", "ContactEmail", "RegisteredAt", "Status"]}
+        GuestRegistrations: {key: "HexKey", headerRow: 1,headers: ["HexKey", "EventID", "EventTitle", "EventDate", "RaceClass", "Model", "HullColour", "SailNo", "CompetitorName", "HomeClub", "ContactEmail", "RegisteredAt", "Status"]}
       }
     }
   }
@@ -254,7 +254,7 @@ function handleAction(action, payload,e) {
     const sheetName = payload.sheet || payload.sheetName;
     const ok = data => ContentService.createTextOutput(JSON.stringify({ success: true, data }))
       .setMimeType(ContentService.MimeType.JSON);
-console.log("Domain: " + payload.domain) 
+console.log("Domain: " + payload.domain + " payload: " + payload) 
     
     switch (action) {
       case "getRegistry": {
