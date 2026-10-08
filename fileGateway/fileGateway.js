@@ -7,25 +7,16 @@ const FOLDERS = {
     overall:   "1c8YEM-I5wxkHMNXL658WEu2n5ylDYfuO"
 };
 
-function doGet(e) {
-    const action   = e.parameter.action;
-    const folderKey = e.parameter.folder;   // "upload" | "processed" | "overall"
-    const fileId   = e.parameter.fileId;
-
-    try {
-        switch (action) {
-            case "listFolder": return listFolder(folderKey);
-            case "readFile":   return readFile(fileId);
-            default:           return respond({ error: "Unknown action: " + action });
-        }
-    } catch(err) {
-        return respond({ error: err.message });
-    }
-}
+function doGet() { return respond({ error: "Use POST" }); }
 
 function doPost(e) {
     try {
         const body = JSON.parse(e.postData.contents);
+        const p = verifyToken(body.token);
+        if (!p) return respond({ code: "AUTH", error: "Unauthorized" });
+        if (p.role === "viewer") return respond({ error: "Forbidden" });
+        if (body.action === "triggerProcessing" && p.role !== "admin") return respond({ error: "Forbidden" });
+
         switch (body.action) {
             case "listFolder":        return listFolder(body.folder);
             case "readFile":          return readFile(body.fileId);
@@ -62,6 +53,12 @@ function listFolder(folderKey) {
 function readFile(fileId) {
     if (!fileId) return respond({ error: "fileId required" });
     const file = DriveApp.getFileById(fileId);
+
+    const ok = Object.values(FOLDERS), ps = file.getParents();
+    let allowed = false;
+    while (ps.hasNext()) if (ok.includes(ps.next().getId())) allowed = true;
+    if (!allowed) return respond({ error: "Forbidden" });
+
     const mimeType = file.getMimeType();
 
     // Google Sheet — read cell A1
