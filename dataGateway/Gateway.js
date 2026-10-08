@@ -273,6 +273,8 @@ function doPost(e) {
 
 function handleAction(action, payload,e) {
   try {
+    const denied = authorize(action, payload);
+    if (denied) return denied;
 
     const updates = payload.updates || payload.update || {};
     const rowData = payload.rowData || {};
@@ -284,6 +286,11 @@ function handleAction(action, payload,e) {
  
     
     switch (action) {
+      case "login": {
+        const s = doLogin(payload.idToken);
+        return s ? json({ success: true, ...s }) : json({ code: "AUTH", error: "Login failed" });
+        }
+
       case "aryaResults":
         return respond(JSON.parse(UrlFetchApp.fetch(
                   "https://mysailingresults.com/api/results/get_results.php?eventid=" + encodeURIComponent(payload.eventId)
@@ -307,12 +314,12 @@ function handleAction(action, payload,e) {
         const batchResults = {};
         batchReqs.forEach(req => {
           try {
+            checkSheetAccess(req.domain, req.sheet);
             // Highly optimized: pulls completely from Apps Script's cache
             batchResults[req.domain + "|" + req.sheet] = getSheetDataCached(req.domain, req.sheet);
           } catch(err) {
             batchResults[req.domain + "|" + req.sheet] = [];
-            return ContentService.createTextOutput(JSON.stringify({ error: err.message }))
-               .setMimeType(ContentService.MimeType.JSON);
+            console.warn(err.message);
           }
         });
         return json({ success: true, results: batchResults });
@@ -343,7 +350,8 @@ function handleAction(action, payload,e) {
         debugContext: diagnosticInfo
       });
     }
-
+    
+    checkSheetAccess(domain, sheetName); 
     if (action === "fetch") {
       return json({ values: getSheetDataCached(domain, sheetName) });
     }
@@ -516,7 +524,7 @@ function auditLog(action, domain, sheetName, recordId, field, before, after, suc
   try {
     const sh      = getSheet("audit", "AuditLog");
     const headers = getRegistryHeaders("audit", "AuditLog");
-    const user    = Session.getActiveUser().getEmail() || "unknown";
+    const user = CURRENT_USER;
     const entry   = {
       HexCode:    recordId,
       Timestamp:  new Date().toISOString(),

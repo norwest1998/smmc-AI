@@ -157,8 +157,15 @@ function doPost(e) {
   try {
     const payload = JSON.parse(raw);
     const action = payload.action || "recordSend";
-
+    
+    if (action !== "markOpened" && !verifyToken(payload.token))   // markOpened stays public for the open-tracker
+      return json({ success: false, code: "AUTH", error: "Unauthorized" });
+    
     switch (action) {
+      case "list":
+        return json({ success: true, records: listTrackingRecords() });
+      case "find":
+        return json({ success: true, records: findTrackingRecords(payload.key || payload.key.id || "") });
       case "recordSend":
         return json({
           success: true,
