@@ -1,4 +1,3 @@
-// --- CACHE UTILITIES FOR GATEWAY ---
 function putCachedData(key, string) {
   const cache = CacheService.getScriptCache();
   const chunkSize = 30000;
@@ -66,7 +65,8 @@ function notifyFrontendCache() {
   try {
     // Calling the API endpoint mapped to index.html (Code.js)
     const HOME_DATA_API = "https://script.google.com/macros/s/AKfycbzGgNMh8KNWYquGuOoGvmrasDR5npiPoNXTouuzVeY9sRwrhDo29BVDbWGrh_FfgoieXQ/exec";
-    UrlFetchApp.fetch(HOME_DATA_API + "?action=clearCache", { muteHttpExceptions: true });
+    UrlFetchApp.fetch(HOME_DATA_API + "?action=clearCache&key=" + encodeURIComponent(
+    PropertiesService.getScriptProperties().getProperty("CLEAR_KEY")), { muteHttpExceptions: true });
   } catch (e) {
     console.warn("Failed to notify frontend API cache", e);
   }
@@ -259,11 +259,13 @@ function doPost(e) {
         // Fallback if content is form-encoded instead of JSON
       }
     }
-
+      
     // Merge URL query parameters with post body payload (body takes precedence)
     payload = Object.assign({}, queryParams, bodyParams);
     const action = payload.action;
-
+   if (action && !verifyToken(payload.token))   
+       return json({ success: false, code: "AUTH", error: "Unauthorized" });
+ 
     return handleAction(action, payload, e);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ error: err.message }))
@@ -273,8 +275,6 @@ function doPost(e) {
 
 function handleAction(action, payload,e) {
   try {
-    const denied = authorize(action, payload);
-    if (denied) return denied;
 
     const updates = payload.updates || payload.update || {};
     const rowData = payload.rowData || {};
@@ -286,6 +286,32 @@ function handleAction(action, payload,e) {
  
     
     switch (action) {
+      case "passwordLogin": {
+        const s = passwordLogin(payload.userId, payload.password);
+        return s ? json({ success: true, ...s }) : json({ code: "AUTH", error: "Invalid userid or password" });
+        }
+
+      case "changePassword": {
+        const err = changePassword(payload.oldPassword, payload.newPassword);
+        if (err) return json({ error: err });
+        const u = lookupUser(CURRENT_USER), exp = Date.now() + TOKEN_TTL_MS;
+        return json({ success: true, token: signToken({ email: CURRENT_USER, role: u.role, exp }),
+                      email: CURRENT_USER, name: u.name, role: u.role, exp });
+        }
+
+      case "resetPassword":
+        resetPassword(payload.email);
+        return json({ success: true });
+
+      case "requestCode":
+        requestLoginCode(payload.email);
+        return json({ success: true });
+
+      case "verifyCode": {
+        const s = verifyLoginCode(payload.email, payload.code);
+        return s ? json({ success: true, ...s }) : json({ code: "AUTH", error: "Invalid or expired code" });
+        }
+
       case "login": {
         const s = doLogin(payload.idToken);
         return s ? json({ success: true, ...s }) : json({ code: "AUTH", error: "Login failed" });
@@ -314,18 +340,31 @@ function handleAction(action, payload,e) {
         const batchResults = {};
         batchReqs.forEach(req => {
           try {
-            checkSheetAccess(req.domain, req.sheet);
+            checkAccess(req.domain, req.sheet, "r");
             // Highly optimized: pulls completely from Apps Script's cache
             batchResults[req.domain + "|" + req.sheet] = getSheetDataCached(req.domain, req.sheet);
           } catch(err) {
             batchResults[req.domain + "|" + req.sheet] = [];
-            console.warn(err.message);
+            return ContentService.createTextOutput(JSON.stringify({ error: err.message }))
+               .setMimeType(ContentService.MimeType.JSON);
           }
         });
         return json({ success: true, results: batchResults });
         
-      case "appendAvgScrReq":
-        return appendAverageScoreRequest("appendAvgScrReq", domain, sheetName, rowData);
+        case "appendAvgScrReq": {
+            const r = payload.rowData || {};
+            if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(r.memberEmail || ""))) return json({ error: "Invalid email" });
+            if (Object.values(r).some(v => String(v).length > 200)) return json({ error: "Value too long" });
+            const cache = CacheService.getScriptCache();
+            const k = "avg_" + r.memberEmail.toLowerCase();
+            const n = Number(cache.get(k) || 0), all = Number(cache.get("avg_all") || 0);
+            if (n >= 5 || all >= 100) return json({ error: "Too many requests. Please try later." });
+            cache.put(k, String(n + 1), 3600);
+            cache.put("avg_all", String(all + 1), 3600);
+            Object.keys(r).forEach(f => { if (/^[=+\-@]/.test(String(r[f]))) r[f] = "'" + r[f]; });
+            // domain/sheet are hardcoded so the client can't target another sheet
+            return appendAverageScoreRequest("appendAvgScrReq", "requests", "AvgScrReq", r);
+          }
 
     }
     
@@ -350,9 +389,9 @@ function handleAction(action, payload,e) {
         debugContext: diagnosticInfo
       });
     }
-    
-    checkSheetAccess(domain, sheetName); 
+
     if (action === "fetch") {
+      checkAccess(domain, sheetName, ACTION_CODE[action]);
       return json({ values: getSheetDataCached(domain, sheetName) });
     }
 
@@ -375,6 +414,7 @@ function handleAction(action, payload,e) {
 
     switch (action) {
       case "append":
+        checkAccess(domain, sheetName, ACTION_CODE[action]);
         const row = headers.map(h => rowData[h] ?? "");
         if (sheetName === "Event Data") {
           const r = sheet.getLastRow();
@@ -394,6 +434,7 @@ function handleAction(action, payload,e) {
 
       case "update":
       case "delete":
+        checkAccess(domain, sheetName, ACTION_CODE[action]);
         if (!keyField) return json({ error: "No key configured for this sheet" });
         if (keyCol === -1) return json({ error: `Key column "${keyField}" not found in headers` });
 
@@ -524,7 +565,7 @@ function auditLog(action, domain, sheetName, recordId, field, before, after, suc
   try {
     const sh      = getSheet("audit", "AuditLog");
     const headers = getRegistryHeaders("audit", "AuditLog");
-    const user = CURRENT_USER;
+    const user    = Session.getActiveUser().getEmail() || "unknown";
     const entry   = {
       HexCode:    recordId,
       Timestamp:  new Date().toISOString(),
