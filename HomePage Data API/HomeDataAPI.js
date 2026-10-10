@@ -108,6 +108,8 @@ function doGet(e) {
   try {
     // Intercept cache clear webhook from Gateway.js
     if (params.action === 'clearCache') {
+      if (params.key !== PropertiesService.getScriptProperties().getProperty('CLEAR_KEY'))
+        return json_({ error: 'Forbidden' });
       clearCachedData('HP_BOOTSTRAP_DATA');
       return json_({ success: true, message: 'Cache busted successfully' });
     }
@@ -118,14 +120,14 @@ function doGet(e) {
     if (params.action === 'applicationsList') return json_(getApplicationsList_());
     if (params.action === 'boatsList') return json_(getBoatsList());
     if (params.action === 'reqList') return json_(getRequestList());
-    if (params.action === 'bootstrap') return json_(getBootstrapData());
+    if (params.action === 'bootstrap') return json_(getBootstrapData(false));
 
     // Legacy discovery contract (Championship Standings module)
     if (params.ss) { 
       if (!/^[A-Za-z0-9_-]{10,}$/.test(params.ss)) { 
         return json_({ error: 'Parameter "ss" must be a valid spreadsheet ID.' }); 
       } 
-      
+      if (!isAllowedWorkbook_(params.ss)) return json_({ error: 'Not permitted' });
       var ss = SpreadsheetApp.openById(params.ss); 
       if (params.sheet) return json_(serveSheet_(ss, params.sheet)); 
       
@@ -148,12 +150,37 @@ function doGet(e) {
   }
 }
 
+function doPost(e) {
+  try {
+    var b = JSON.parse(e.postData.contents);
+    var p = verifyToken(b.token);                       // same helpers + TOKEN_SECRET as the other projects
+    if (!p) return json_({ code: 'AUTH', error: 'Unauthorized' });
+    if (b.action === 'bootstrapPrivate') {
+      var d = getBootstrapData(true);
+      if (p.role === 'viewer' && d.requests) d.requests.forEach(function (r) { delete r.email; delete r.readon; });
+      return json_(d);
+    }
+    return json_({ error: 'Unknown action' });
+  } catch (err) { return json_({ error: String((err && err.message) || err) }); }
+}
+
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
 // ============================== SPREADSHEET UTIL ==============================
+function isAllowedWorkbook_(id) {
+  var cache = CacheService.getScriptCache(), k = 'OK_WB_' + id, hit = cache.get(k);
+  if (hit) return hit === '1';
+  var ok = false;
+  try {
+    var ps = DriveApp.getFileById(id).getParents();
+    while (ps.hasNext()) if (ps.next().getName() === HPAPI_CFG.overallFolderName) ok = true;
+  } catch (e) {}
+  cache.put(k, ok ? '1' : '0', 21600);
+  return ok;
+}
 
 function openSpreadsheet_(configuredId, fallbackName) {
   if (configuredId) return SpreadsheetApp.openById(configuredId);
@@ -187,18 +214,13 @@ function sanitizeCell_(value) {
 function safe_(fn) {
   try { return fn(); } catch (e) { console.error(e); return null; }
 }
-
-function getBootstrapData() {
+ 
+function getBootstrapData(includePrivate) {
+  var d = null;
   var cachedStr = getCachedData('HP_BOOTSTRAP_DATA');
-  if (cachedStr) {
-    try {
-      return JSON.parse(cachedStr);
-    } catch (e) {
-      console.warn("Error parsing cache. Falling back.");
-    }
-  }
-  // Rebuild if cache is empty or corrupted
-  return refreshBootstrapCache();
+  if (cachedStr) { try { d = JSON.parse(cachedStr); } catch (e) {} }
+  if (!d) d = refreshBootstrapCache();
+  return includePrivate ? d : { latestResults: d.latestResults, stats: d.stats };
 }
 
 function getRequestList() {
@@ -366,7 +388,7 @@ function getApplicationsList_() {
 
 function serveSheet_(ss, sheetName) {
   var sheet = ss.getSheetByName(sheetName);
-  if (!sheet) throw new Error('Sheet not found: ' + sheetName);
+  if (!sheet || sheet.isSheetHidden()) throw new Error('Sheet not found: ' + sheetName)
 
   var values = sheet.getDataRange().getValues();
   var tz = ss.getSpreadsheetTimeZone();
