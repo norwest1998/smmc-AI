@@ -303,6 +303,17 @@ function handleAction(action, payload,e) {
         return json({ success: true, token: signToken({ email: CURRENT_USER, role: u.role, exp }),
                       email: CURRENT_USER, name: u.name, role: u.role, exp });
         }
+      case "listUsers": 
+      case "createUser": 
+      case "updateUser": 
+      case "addUser": {
+          const denied = requireAdmin_(payload); if (denied) return denied;
+          if (action === "listUsers") return json({ success: true, values: listUsers_() });
+          if (action === "updateUser") return json({ success: true, ...updateUser_(payload.email, payload) });
+          const r = action === "addUser" ? addUser_(payload.email, payload.name)     // fixed defaults
+                                        : addUser_(payload.email, payload.name, payload.role, payload.loginType);
+          return json({ success: true, ...r });
+        }
 
       case "resetPassword":
         resetPassword(payload.email);

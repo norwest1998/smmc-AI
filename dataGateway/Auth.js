@@ -1,20 +1,21 @@
 const GOOGLE_CLIENT_ID = "738246015685-4vk2o2l7nit598jvkl8r423sa4hff8rf.apps.googleusercontent.com";
 const TOKEN_TTL_MS     = 60 * 60 * 1000;
-const PUBLIC_ACTIONS = ["login", "requestCode", "verifyCode", "passwordLogin", "appendAvgScrReq"];
+const PUBLIC_ACTIONS = ["login", "requestCode", "verifyCode", "passwordLogin"];
 const DENY_SHEETS      = ["apps|Tokens", "audit|Users"];
 const PERMS = { viewer:["read"], editor:["read","write"], admin:["read","write","delete","admin"] };
 const ROLE_DOMAINS = {
-  viewer: { members:"r", documents:"r", calendar:"r", notes:"r", results:"r", tracking:"r" },
+  viewer: { members:"r", documents:"r", calendar:"r", notes:"r", results:"r", tracking:"r", apps:"r", requests:"rw"  },
   editor: { members:"rw", documents:"rw", calendar:"rw", notes:"rw", results:"rw", tracking:"rw", apps:"rw", requests:"rw" },
   admin:  { members:"rwd", documents:"rwd", calendar:"rwd", notes:"rwd", results:"rwd", tracking:"rwd",
             apps:"rwd", requests:"rwd", audit:"rwd" }
 };
-const ACTION_CODE = { fetch:"r", batchFetch:"r", layout:"r", append:"w", update:"w", delete:"d" };
-const ANY_ROLE    = ["getRegistry", "registerSchema", "changePassword"];
+const ACTION_CODE = { fetch:"r", search:"r", batchFetch:"r", layout:"r", append:"w", update:"w", delete:"d" };
+const ANY_ROLE    = ["getRegistry", "changePassword", "listFolder", "readFile", "registerSchema"];
 const ADMIN_ONLY = ["refreshCache", "resetPassword", "listUsers", "createUser", "updateUser", "addUser"];
 const ACTION_TYPE = {
   fetch:"read", batchFetch:"read", layout:"read", getRegistry:"read", registerSchema:"read",
-  append:"write", update:"write", delete:"delete", refreshCache:"admin"
+  append:"write", update:"write", delete:"delete", refreshCache:"admin",
+  listFolder:"read", readFile:"read", triggerResults:"write"
 };
 var CURRENT_USER = "unknown", CURRENT_ROLE = "";
 
@@ -73,9 +74,11 @@ function authorize(action, payload) {
   if (PUBLIC_ACTIONS.includes(action)) { CURRENT_USER = "public"; return null; }
   const p = verifyToken(payload.token);
   const u = p && lookupUser(p.email);
-  if (!u) return json({ code: "AUTH", error: "Unauthorized" });
+  if (!u) {
+    return json({ code: "AUTH", error: "Unauthorized" });
+  }
   if (p.mc && action !== "changePassword") return json({ code: "AUTH", error: "Password change required" });
-  const known = action in ACTION_CODE || ANY_ROLE.includes(action) || ADMIN_ONLY.includes(action) || action === "aryaResults";
+  const known = action in ACTION_CODE || ANY_ROLE.includes(action) || ADMIN_ONLY.includes(action);
   if (!known || !ROLE_DOMAINS[u.role] || (ADMIN_ONLY.includes(action) && u.role !== "admin"))
     return json({ code: "FORBIDDEN", error: "Forbidden" });
   CURRENT_USER = p.email; CURRENT_ROLE = u.role;
@@ -187,3 +190,76 @@ function resetPassword(email) {                   // admin action, or run from t
   MailApp.sendEmail(row.Email, "SMMC temporary password", "Your temporary password is: " + temp + "\nYou must change it when you first sign in.");
 }
 function resetFromEditor() { resetPassword("someone@example.com"); }   // bootstrap your first password user
+
+const VALID_ROLES = ["viewer", "editor", "admin"], VALID_LOGIN = ["google", "code", "password"];
+
+function requireAdmin_(payload) {
+  const p = verifyToken(payload.token), u = p && lookupUser(p.email);
+  if (!u || u.role !== "admin" || p.mc) return json({ code: "FORBIDDEN", error: "Forbidden" });
+  CURRENT_USER = p.email; CURRENT_ROLE = u.role; return null;
+}
+const defaultLoginType_ = email => /@gmail\.com$/i.test(String(email).trim()) ? "google,code" : "code";
+function normLoginType_(lt) {
+  const p = [...new Set(String(lt || "").toLowerCase().split(",").map(s => s.trim()).filter(Boolean))];
+  if (!p.length || p.some(x => !VALID_LOGIN.includes(x))) throw new Error("Invalid login type");
+  return p.join(",");
+}
+const safeText_ = s => /^[=+\-@]/.test(String(s)) ? "'" + s : String(s).trim();
+
+function listUsers_() {                       // never returns Salt / PwdHash
+  const v = usersSheet_().getDataRange().getValues(), h = v[0].map(x => String(x).trim());
+  return v.slice(1).filter(r => String(r[h.indexOf("Email")]).trim()).map(r => {
+    const o = Object.fromEntries(h.map((k, i) => [k, r[i]]));
+    return { Email: String(o.Email).trim(), Name: o.Name, Role: String(o.Role).trim().toLowerCase(),
+      Active: String(o.Active).toUpperCase() === "TRUE", LoginType: String(o.LoginType || ""),
+      HasPassword: !!o.PwdHash, MustChange: String(o.MustChange).toUpperCase() === "TRUE",
+      LockedUntil: o.LockedUntil instanceof Date ? o.LockedUntil.toISOString() : String(o.LockedUntil || "") };
+  });
+}
+
+// Defaults: role viewer; LoginType 'google,code' for @gmail.com else 'code'.
+function addUser_(email, name, role, loginType) {
+  email = String(email || "").trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Invalid email");
+  role = String(role || "viewer").trim().toLowerCase();
+  if (!VALID_ROLES.includes(role)) throw new Error("Invalid role");
+  if (getUserRow_(email)) throw new Error("User already exists");
+  const lt = loginType ? normLoginType_(loginType) : defaultLoginType_(email);
+  const sh = usersSheet_(), h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(x => String(x).trim());
+  const rec = { Email: email, Role: role, Name: safeText_(name || ""), Active: true, LoginType: lt, MustChange: false };
+  sh.appendRow(h.map(k => rec[k] ?? ""));
+  CacheService.getScriptCache().remove("USERS_MAP");
+  auditLog("append", "audit", "Users", email, "", "", { Email: email, Role: role, LoginType: lt }, "Success");
+  return { email, role, loginType: lt };
+}
+
+function updateUser_(email, f) {
+  email = String(email || "").trim().toLowerCase();
+  const row = getUserRow_(email); if (!row) throw new Error("Unknown user");
+  const self = email === CURRENT_USER, cache = CacheService.getScriptCache(), set = {};
+  if (f.role) {
+    const r = String(f.role).trim().toLowerCase();
+    if (!VALID_ROLES.includes(r)) throw new Error("Invalid role");
+    if (self && r !== String(row.Role).trim().toLowerCase()) throw new Error("You can't change your own role");
+    set.Role = r;
+  }
+  if (f.loginType) set.LoginType = normLoginType_(f.loginType);
+  if (f.newEmail) {
+    const ne = String(f.newEmail).trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ne)) throw new Error("Invalid email");
+    if (self) throw new Error("You can't change your own email");
+    if (ne !== email && getUserRow_(ne)) throw new Error("Email already in use");
+    set.Email = ne;
+  }
+  if (f.clearLock === true || f.clearLock === "true") {
+    set.LockedUntil = "";
+    cache.remove("pw_fail_" + email); cache.remove("otp_rl_" + email);   // also releases the password-attempt lockout
+  }
+  let n = 0;
+  Object.keys(set).forEach(k => {
+    const before = row[k] instanceof Date ? row[k].toISOString() : String(row[k] ?? "");
+    if (String(set[k]) !== before) { auditLog("update", "audit", "Users", email, k, before, set[k], "Success"); n++; }
+  });
+  setUserFields_(row, set);                   // also clears USERS_MAP cache
+  return { updated: n };
+}
