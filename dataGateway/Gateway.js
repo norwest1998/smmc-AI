@@ -263,8 +263,13 @@ function doPost(e) {
     // Merge URL query parameters with post body payload (body takes precedence)
     payload = Object.assign({}, queryParams, bodyParams);
     const action = payload.action;
-   if (action && !verifyToken(payload.token))   
-       return json({ success: false, code: "AUTH", error: "Unauthorized" });
+    
+    // FIX: Call authorize() from Auth.js. 
+    // This handles PUBLIC_ACTIONS, verifies the token, AND sets CURRENT_ROLE.
+    if (action) {
+       const authError = authorize(action, payload);
+       if (authError) return authError; // Returns the "Unauthorized" json if it fails
+    }
  
     return handleAction(action, payload, e);
   } catch (err) {
