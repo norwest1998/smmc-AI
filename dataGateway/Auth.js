@@ -11,7 +11,7 @@ const ROLE_DOMAINS = {
 };
 const ACTION_CODE = { fetch:"r", batchFetch:"r", layout:"r", append:"w", update:"w", delete:"d" };
 const ANY_ROLE    = ["getRegistry", "registerSchema", "changePassword"];
-const ADMIN_ONLY  = ["refreshCache", "resetPassword"];
+const ADMIN_ONLY = ["refreshCache", "resetPassword", "listUsers", "createUser", "updateUser", "addUser"];
 const ACTION_TYPE = {
   fetch:"read", batchFetch:"read", layout:"read", getRegistry:"read", registerSchema:"read",
   append:"write", update:"write", delete:"delete", refreshCache:"admin"
