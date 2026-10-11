@@ -20,8 +20,12 @@ function handleGet_(e) {
   const date = e.parameter.date;
 
   if (action === "listConflicts") {
-    const events = getRegattaEventsList(date);
-    return json({ events: events });
+    try {
+      const events = getRegattaEventsList(date);
+      return json({ events: events });
+    } catch(err) {
+      return json({ error: err.message, stack: err.stack });
+    }
   }
 
   if (action === "fetch") {
@@ -72,7 +76,10 @@ function handleGet_(e) {
     const calData = calSheet.getDataRange().getValues();
     const allData = calData;
     const today = new Date();
-    const target = new Date(today.getFullYear(), today.getMonth() + 2, 1);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const target = new Date(yesterday.getFullYear(), yesterday.getMonth() + 2, 1);
     const threeMonthsOut = new Date(target.getFullYear(), target.getMonth() + 1, 0);
   
     // Load class images from Club Management spreadsheet (keyed by ClassName)
@@ -89,7 +96,7 @@ function handleGet_(e) {
   
       const eventDate = row[2] instanceof Date ? row[2] : new Date(row[2]);
       if (isNaN(eventDate)) continue;
-      if (eventDate < today || eventDate > threeMonthsOut) continue;
+      if (eventDate < yesterday || eventDate > threeMonthsOut) continue;
   
       const hexKey      = row[0];   // Col A
       const boatClass   = row[6];   // Col G
@@ -140,7 +147,7 @@ function handleGet_(e) {
       .map(key => monthBuckets[key]);
   
     return ContentService
-      .createTextOutput(JSON.stringify({ months: sortedMonths, allEvents: allData }))
+      .createTextOutput(JSON.stringify({ months: sortedMonths },{ allEvents: allData}))
       .setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -288,7 +295,9 @@ function doPost(e) {
     const sheet = ss.getSheetByName(body.sheet);
 
     console.log("action: " + body.action);
-    
+    if (body.action && !verifyToken(body.payload.token))   // markOpened stays public for the open-tracker
+    return json({ success: false, code: "AUTH", error: "Unauthorized" });
+ 
     if (body.action === "runRegionalConflicts") {
       const result = checkRegionalConflicts(); // Ensure this function does not contain SpreadsheetApp.getUi()
       return ContentService.createTextOutput(JSON.stringify(result))
