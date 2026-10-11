@@ -208,16 +208,18 @@ function handleGet_(e) {
     // =========================
 
     raceData.forEach(row => {
-      const regattaName = row[0];
-      if (!regattaName) return;
+      
+      const regattaName = String(row[0] || '').trim();
+      if (!regattaName || /^no event/i.test(regattaName)) return;
 
-      const startTime = row[1];
-      const endTime = row[2];
-      const startDisplay = Utilities.formatDate(startTime, Session.getScriptTimeZone(), 'HH:mm');
-      const endDisplay   = Utilities.formatDate(endTime, Session.getScriptTimeZone(), 'HH:mm');
 
       const raceDate = new Date(title);
-      if (isNaN(raceDate)) return; // skip this malformed row only
+      if (isNaN(raceDate)) return;
+      const startTime = toDate_(row[1], raceDate);
+      const endTime = toDate_(row[2], raceDate);
+      if (isNaN(startTime) || isNaN(endTime)) return;
+      const startDisplay = Utilities.formatDate(startTime, Session.getScriptTimeZone(), 'HH:mm');
+      const endDisplay   = Utilities.formatDate(endTime, Session.getScriptTimeZone(), 'HH:mm');
 
       const bgImage = getWeatherPic(raceDate);
 
@@ -230,7 +232,8 @@ function handleGet_(e) {
         if (!(w[0] instanceof Date)) continue;
 
         const weatherTime = w[0];
-        if (weatherTime < startTime || weatherTime > endTime) continue;
+        const startHr = new Date(startTime); startHr.setMinutes(0, 0, 0);
+        if (weatherTime < startHr || weatherTime > endTime) continue;
         var wind = w[2] + getWindArrow(w[1]);
         var temp = Math.round(w[3]);
         var uvIdx = Math.round(w[9]);
