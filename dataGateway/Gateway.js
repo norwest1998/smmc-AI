@@ -224,6 +224,15 @@ const REGISTRY = [
         GuestRegistrations: {key: "HexKey", headerRow: 1,headers: ["HexKey", "EventID", "EventTitle", "EventDate", "RaceClass", "Model", "HullColour", "SailNo", "CompetitorName", "HomeClub", "ContactEmail", "RegisteredAt", "Status"]}
       }
     }
+  },
+  {
+    media: {
+      spreadsheetId: "1GyjVfQpgQbxL8TF87Eaa-mFyLdqW_C8oxdl9OZfxYls",
+      defaultSheet: "Queue",
+      sheets: {
+        Queue: {key: "PostID", headerRow: 1,headers: ["Status","SpreadsheetId","SheetId","SpreadsheetName","SheetName","RegattaName","RaceDate","RaceReport","Created","Started","PostID","Completed","Error"]}
+      }
+    }
   }
 ];
 
@@ -331,6 +340,16 @@ function handleAction(action, payload,e) {
       case "login": {
         const s = doLogin(payload.idToken);
         return s ? json({ success: true, ...s }) : json({ code: "AUTH", error: "Login failed" });
+        }
+      
+      case "previewFacebookImage":
+        try {
+            // Uses the existing renderRoundSheetToPNG function from your files
+            const blob = renderRoundSheetToPNG(payload.spreadsheetId, payload.sheetId);
+            const b64 = Utilities.base64Encode(blob.getBytes());
+            return json({ success: true, imageBase64: "data:image/png;base64," + b64 });
+        } catch(err) {
+            return json({ error: "Preview generation failed: " + err.message });
         }
 
       case "aryaResults":
