@@ -287,6 +287,8 @@ function doPost(e) {
   }
 }
 
+
+
 function handleAction(action, payload,e) {
   try {
 
@@ -429,7 +431,12 @@ function handleAction(action, payload,e) {
       checkAccess(domain, sheetName, ACTION_CODE[action]);
       return json({ values: getSheetDataCached(domain, sheetName) });
     }
-
+    
+    if (action === "search") {
+      checkAccess(domain, sheetName, ACTION_CODE[action]);
+      return json({ values: findResults(domain, sheetName, payload.filters) });
+    }
+    
     if (action === "layout") {
       return json({success: true, domain: domain, sheetName: sheetName, layout: getSheetLayout(domain, sheetName)});
     }
@@ -600,7 +607,8 @@ function auditLog(action, domain, sheetName, recordId, field, before, after, suc
   try {
     const sh      = getSheet("audit", "AuditLog");
     const headers = getRegistryHeaders("audit", "AuditLog");
-    const user    = Session.getActiveUser().getEmail() || "unknown";
+    const u       = CURRENT_USER !== "unknown" && CURRENT_USER !== "public" ? lookupUser(CURRENT_USER) : null;
+    const user    = u ? u.name + " <" + CURRENT_USER + ">" : CURRENT_USER;
     const entry   = {
       HexCode:    recordId,
       Timestamp:  new Date().toISOString(),
