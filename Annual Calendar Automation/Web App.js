@@ -19,6 +19,8 @@ function handleGet_(e) {
   const sheetName = e.parameter.sheet;
   const date = e.parameter.date;
 
+  console.log("doGet action: " + action + ", type: " + type + ", sheet: " + sheetName + ", date: " + date);
+
   if (action === "listConflicts") {
     try {
       const events = getRegattaEventsList(date);
