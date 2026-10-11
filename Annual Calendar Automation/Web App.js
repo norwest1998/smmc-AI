@@ -18,12 +18,10 @@ function handleGet_(e) {
   const action = e.parameter.action;
   const sheetName = e.parameter.sheet;
   const date = e.parameter.date;
-
-  console.log("doGet action: " + action + ", type: " + type + ", sheet: " + sheetName + ", date: " + date);
-
+console.log("doGet action: " + action + ", type: " + type + ", sheet: " + sheetName + ", date: " + date);
   if (action === "listConflicts") {
     try {
-      const events = getRegattaEventsList(date);
+      const events = getConflictingEventsList(date);
       return json({ events: events });
     } catch(err) {
       return json({ error: err.message, stack: err.stack });
@@ -219,7 +217,8 @@ function handleGet_(e) {
       if (isNaN(raceDate)) return;
       const startTime = toDate_(row[1], raceDate);
       const endTime = toDate_(row[2], raceDate);
-      if (isNaN(startTime) || isNaN(endTime)) return;
+      if (isNaN(startTime) || isNaN(endTime)) 
+      ;
       const startDisplay = Utilities.formatDate(startTime, Session.getScriptTimeZone(), 'HH:mm');
       const endDisplay   = Utilities.formatDate(endTime, Session.getScriptTimeZone(), 'HH:mm');
 
@@ -299,9 +298,12 @@ function doPost(e) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(body.sheet);
 
+    const p = verifyToken(body.token);
+    if (!p) return json({ success: false, code: "AUTH", error: "Unauthorized" });
+    if (body.action && p.role === "viewer")
+      return json({ success: false, code: "FORBIDDEN", error: "Forbidden" });
+
     console.log("action: " + body.action);
-    if (body.action && !verifyToken(body.payload.token))   // markOpened stays public for the open-tracker
-    return json({ success: false, code: "AUTH", error: "Unauthorized" });
  
     if (body.action === "runRegionalConflicts") {
       const result = checkRegionalConflicts(); // Ensure this function does not contain SpreadsheetApp.getUi()
@@ -347,4 +349,19 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({ error: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+function _sig(b) {
+  const secret = PropertiesService.getScriptProperties().getProperty("TOKEN_SECRET");
+  return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(b, secret));
+}
+
+function verifyToken(t) {
+  if (!t || String(t).indexOf(".") < 0) return null;
+  const [b, s] = String(t).split("."), e = _sig(b);
+  let d = s.length ^ e.length;
+  for (let i = 0; i < e.length; i++) d |= (s.charCodeAt(i) || 0) ^ e.charCodeAt(i);
+  if (d) return null;
+  const p = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(b)).getDataAsString());
+  return p.exp > Date.now() ? p : null;
 }
