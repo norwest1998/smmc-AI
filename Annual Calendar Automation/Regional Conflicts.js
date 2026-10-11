@@ -1,7 +1,18 @@
-
+/**
+ * Safely displays UI alerts when run interactively, or logs when run via Web App API.
+ */
+function showAlert_(message) {
+  try {
+    SpreadsheetApp.getUi().alert(message);
+  } catch (e) {
+    Logger.log('[Headless Web API Execution] ' + message);
+  }
+}
 
 function checkRegionalConflicts() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  // Target 'Event Data' sheet specifically, fallback to active sheet if not found
+  const sheet = ss.getSheetByName('Event Data') || ss.getActiveSheet();
   const data = sheet.getDataRange().getValues();
   
   // Find column indices
@@ -11,12 +22,16 @@ function checkRegionalConflicts() {
   const conflictsCol = headers.indexOf('Regional Conflicts');
   
   if (dateCol === -1 || classCol === -1 || conflictsCol === -1) {
-    SpreadsheetApp.getUi().alert('Required columns not found. Please ensure columns named "Date", "Class", and "Regional Conflicts" exist.');
-    return;
+    const errorMsg = 'Required columns not found. Please ensure columns named "Date", "Class", and "Regional Conflicts" exist in sheet: ' + sheet.getName();
+    showAlert_(errorMsg);
+    return { 
+      success: false, 
+      error: errorMsg 
+    };
   }
   
-  const eventsUrl = 'https://radiosailing.org.au/index.php?arcade=events';
-  const resultsUrl = 'https://radiosailing.org.au/index.php?arcade=results-list';
+  const eventsUrl = 'https://radiosailing.org.au/events';
+  const resultsUrl = 'https://radiosailing.org.au/results';
   
   // Fetch both pages
   let futureEvents = [];
@@ -46,7 +61,7 @@ function checkRegionalConflicts() {
     const eventDate = new Date(data[i][dateCol]);
     const eventClass = data[i][classCol];
     
-    if (!eventDate || !eventClass) continue;
+    if (!eventDate || !eventClass || isNaN(eventDate.getTime())) continue;
     
     const dateKey = eventDate.toDateString();
     if (!dateGroups[dateKey]) {
@@ -100,15 +115,19 @@ function checkRegionalConflicts() {
     }
   }
   
-  SpreadsheetApp.getUi().alert('Regional conflicts check completed!');
-  
-  // Now update the Upcoming Events sheet
-  updateUpcomingEvents(sheet, dateCol, conflictsCol);
+  // Update the Upcoming Events sheet
+  try {
+    updateUpcomingEvents(sheet, dateCol, conflictsCol);
+  } catch (e) {
+    Logger.log('Error updating upcoming events: ' + e);
+  }
+
+  showAlert_(`Regional conflicts check completed!\nFound ${totalConflictsFound} conflicts across ${datesWithConflicts} event dates.`);
 
   return {
     success: true,
-    datesWithConflicts,
-    totalConflictsFound
+    datesWithConflicts: datesWithConflicts,
+    totalConflictsFound: totalConflictsFound
   };
 }
 
@@ -308,7 +327,7 @@ function scrapeEvents(url) {
   const events = [];
   
   // Determine if this is the events page (6 columns) or results page (5 columns)
-  const isEventsPage = url.includes('arcade=events');
+  const isEventsPage = url.includes('events');
   
   // Find the table body content between <tbody> tags or look for table rows
   const tablePattern = /<tr[^>]*>(.*?)<\/tr>/gis;
@@ -347,17 +366,18 @@ function scrapeEvents(url) {
       classStr = stripHtml(cells[3]).trim();
       stateStr = stripHtml(cells[4]).trim();
     } else {
-      // Results page: 5 columns - Month | Date | Event | Class | State
-      // cells[0] = Month (e.g., "Dec 2025")
-      // cells[1] = Date (e.g., "06 Dec 2025")
+      // Results page: 7 columns - Date |	Class | Event	| Venue	| Races	| Winner | Details
+      // cells[0] = Date (e.g., "06 Dec 2025")
+      // cells[1] = Class
       // cells[2] = Event with link and location
-      // cells[3] = Class
-      // cells[4] = State
-      monthStr = stripHtml(cells[0]).trim();
-      dateStr = stripHtml(cells[1]).trim();
+      // cells[3] = Venue
+      // cells[4] = Race
+      // cells[5] = Winner
+      // cells[6] = Link href to full results
+      dateStr = stripHtml(cells[0]).trim();
       eventCell = cells[2];
-      classStr = stripHtml(cells[3]).trim();
-      stateStr = stripHtml(cells[4]).trim();
+      classStr = stripHtml(cells[1]).trim();
+      resultLink = stripHtml(cells[6]).trim();
     }
     
     // Extract event name and URL from the link in eventCell
