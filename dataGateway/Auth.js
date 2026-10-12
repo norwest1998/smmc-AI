@@ -5,16 +5,17 @@ const DENY_SHEETS      = ["apps|Tokens", "audit|Users"];
 const PERMS = { viewer:["read"], editor:["read","write"], admin:["read","write","delete","admin"] };
 const ROLE_DOMAINS = {
   viewer: { members:"r", documents:"r", calendar:"r", notes:"r", results:"r", tracking:"r", apps:"r", requests:"rw", media:"r"  },
+  coord: { members:"r", documents:"r", calendar:"r", notes:"r", results:"rw", tracking:"r", apps:"r", requests:"rw", media:"r"  },
   editor: { members:"rw", documents:"rw", calendar:"rw", notes:"rw", results:"rw", tracking:"rw", apps:"rw", requests:"rw", media:"rw" },
   admin:  { members:"rwd", documents:"rwd", calendar:"rwd", notes:"rwd", results:"rwd", tracking:"rwd",
             apps:"rwd", requests:"rwd", audit:"rwd", media:"rwd" }
 };
-const ACTION_CODE = { fetch:"r", search:"r", batchFetch:"r", layout:"r", append:"w", update:"w", delete:"d" };
+const ACTION_CODE = { fetch:"r", search:"r", batchFetch:"r", layout:"r", append:"w", update:"w", delete:"d", appendAvgScrReq:"w" };
 const ANY_ROLE    = ["getRegistry", "changePassword", "listFolder", "readFile", "registerSchema"];
 const ADMIN_ONLY = ["refreshCache", "resetPassword", "listUsers", "createUser", "updateUser", "addUser"];
 const ACTION_TYPE = {
   fetch:"read", batchFetch:"read", layout:"read", getRegistry:"read", registerSchema:"read",
-  append:"write", update:"write", delete:"delete", refreshCache:"admin",
+  append:"write", appendAvgScrReq:"write", update:"write", delete:"delete", refreshCache:"admin",
   listFolder:"read", readFile:"read", triggerResults:"write"
 };
 var CURRENT_USER = "unknown", CURRENT_ROLE = "";
