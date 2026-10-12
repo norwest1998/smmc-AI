@@ -390,7 +390,9 @@ function handleAction(action, payload,e) {
         
         case "appendAvgScrReq": {
             const r = payload.rowData || {};
-            if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(r.memberEmail || ""))) return json({ error: "Invalid email" });
+            r.memberEmail = lookupMemberEmail(r.memberName);
+        console.log("email: " + r.memberEmail + " name: " + r.memberName);
+            if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.memberEmail)) return json({ error: "No valid email on file for this member" });
             if (Object.values(r).some(v => String(v).length > 200)) return json({ error: "Value too long" });
             const cache = CacheService.getScriptCache();
             const k = "avg_" + r.memberEmail.toLowerCase();
@@ -646,16 +648,20 @@ function appendAverageScoreRequest(action, domain, sheet, rowData) {
       message: "Sheet tab 'AvgScrReq' not found in spreadsheet."
     })).setMimeType(ContentService.MimeType.JSON);
   }
+
   var newRow = [
     rowData.requestId || "",
     rowData.timestamp || new Date().toISOString(),
     rowData.memberName || "",
     rowData.memberEmail || "",
+    rowData.boatId || "",
+    rowData.eventId || "",
     rowData.eventDate || "",
     rowData.boatClass || "",
     rowData.regattaType || "",
     rowData.eventName || "",
     rowData.conflictingRegatta || "",
+    rowData.confRegId || "",
     rowData.status || "Received",
     "", // Decision Date
     "", // Decision By
@@ -674,6 +680,19 @@ function appendAverageScoreRequest(action, domain, sheet, rowData) {
     requestId: rowData.requestId
   })).setMimeType(ContentService.MimeType.JSON);
 
+}
+
+function lookupMemberEmail(name) {
+  const entry = getRegistryEntry("members");                                   // ASSUMED domain name
+  const sh = SpreadsheetApp.openById(entry.spreadsheetId).getSheetByName("Members"); // ASSUMED tab name
+  if (!sh || !name) return "";
+  const [hdr, ...rows] = sh.getDataRange().getValues();
+  const norm = h => String(h).trim().toLowerCase();
+  const iName  = hdr.findIndex(h => ["membername", "member"].includes(norm(h)));
+  const iEmail = hdr.findIndex(h => ["email", "email address", "member email"].includes(norm(h)));
+  if (iName < 0 || iEmail < 0) return "";
+  const row = rows.find(x => String(x[iName]).trim().toLowerCase() === String(name).trim().toLowerCase());
+  return row ? String(row[iEmail]).trim() : "";
 }
 
 /**
