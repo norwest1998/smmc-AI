@@ -1,0 +1,303 @@
+/**
+ * ScheduledEmail.gs
+ * Add this file to the same Apps Script project as Code.js (Email Management).
+ * Bound to the Email Tracking spreadsheet (1T9Hojn4zW7C-2UXg8O8OYKcq_BRYqCHsgU2n3S1IW8o)
+ *
+ * SHEETS USED (auto-created if missing):
+ *   Drafts  — rows written by the frontend when composing a scheduled email
+ *   Sent    — rows written here after successful send
+ *   Tracking — existing sheet, rows updated to "Sent" after scheduled send fires
+ *
+ * DRAFT SHEET HEADERS (must match frontend appendSheet payload):
+ *   Draft ID | Key | Subject | To | CC | BCC | Body | Template ID |
+ *   Signature ID | Scheduled | Saved At | Status
+ *
+ * SENT SHEET HEADERS:
+ *   Sent ID | Key | Subject | To | CC | Scheduled | Sent At | Body |
+ *   Template ID | Recipient Count
+ */
+
+// ── Sheet name constants ────────────────────────────────────────
+const DRAFT_SHEET  = "Drafts";
+const SENT_SHEET   = "Sent";
+
+const DRAFT_HEADERS = [
+  "Draft ID","Key","Subject","To","CC","BCC","Body",
+  "Template ID","Signature ID","Scheduled","Saved At","Status"
+];
+const SENT_HEADERS = [
+  "Sent ID","Key","Subject","To","CC","Scheduled",
+  "Sent At","Body","Template ID","Recipient Count"
+];
+
+// ── Sheet helpers ───────────────────────────────────────────────
+function getDraftSheet() {
+  return getOrCreateSheet_(DRAFT_SHEET, DRAFT_HEADERS);
+}
+function getSentSheet() {
+  return getOrCreateSheet_(SENT_SHEET, SENT_HEADERS);
+}
+function getOrCreateSheet_(name, headers) {
+  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  let   sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function sheetToObjects_(sheet) {
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  const headers = data[0];
+  return data.slice(1)
+    .map((row, i) => {
+      const obj = { _rowIndex: i + 2 };
+      headers.forEach((h, c) => { obj[h] = row[c] ?? ""; });
+      return obj;
+    })
+    .filter(r => Object.values(r).some(v => v !== "" && v !== null));
+}
+
+
+
+
+
+// ── 1. createScheduledTrigger_ ──────────────────────────────────
+/**
+ * Called by the frontend when the user clicks Send on a scheduled email.
+ * Stores the full email payload in the Drafts sheet and creates a
+ * time-based Apps Script trigger set to fire at scheduledAt.
+ *
+ * Payload shape (from frontend):
+ * {
+ *   action:       "createScheduledTrigger",
+ *   draftId:      "T1ABC…",          // uid from frontend
+ *   scheduledAt:  "2026-10-01T09:00" // datetime-local value
+ *   subject:      "Important: AGM Notice",
+ *   to:           "a@x.com, b@x.com",
+ *   cc:           "",
+ *   bcc:          "",
+ *   body:         "<p>…</p>",        // resolved HTML per recipient
+ *   key:          "AGM-2026",
+ *   templateId:   "TABC…",
+ *   recipients:   [{ name:"Jane", email:"jane@x.com", resolvedBody:"<p>Hi Jane…</p>" }]
+ * }
+ */
+function createScheduledTrigger_(payload) {
+  const { draftId, scheduledAt, subject, to, cc, bcc, body, key, templateId, recipients } = payload;
+
+  if (!draftId || !scheduledAt) {
+    return { success: false, error: "draftId and scheduledAt are required." };
+  }
+
+  const fireAt = new Date(scheduledAt);
+  if (isNaN(fireAt.getTime()) || fireAt <= new Date()) {
+    return { success: false, error: "scheduledAt must be a valid future date/time." };
+  }
+
+  // Store draft row so runScheduledEmails_ can retrieve it
+  const draftSheet = getDraftSheet();
+  const existing   = sheetToObjects_(draftSheet).find(r => r["Draft ID"] === draftId);
+
+  const draftRow = [
+    draftId,
+    key           || "",
+    subject       || "",
+    to            || "",
+    cc            || "",
+    bcc           || "",
+    // Store recipients + resolved bodies as JSON in the Body column
+    JSON.stringify({ html: body, recipients: recipients || [] }),
+    templateId    || "",
+    "",           // Signature ID (already embedded in body)
+    scheduledAt,
+    new Date().toISOString(),
+    "Scheduled"
+  ];
+
+  if (existing) {
+    draftSheet.getRange(existing._rowIndex, 1, 1, draftRow.length).setValues([draftRow]);
+  } else {
+    draftSheet.appendRow(draftRow);
+  }
+
+  // Create a one-off time-based trigger
+  // Store the draftId in the trigger's unique ID via PropertiesService so
+  // runScheduledEmails_ knows which draft to process.
+  const trigger = ScriptApp.newTrigger("runScheduledEmails")
+    .timeBased()
+    .at(fireAt)
+    .create();
+
+  // Map triggerId → draftId so we can look up the right draft when it fires
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty("trigger_" + trigger.getUniqueId(), draftId);
+
+  return {
+    success:    true,
+    draftId:    draftId,
+    triggerId:  trigger.getUniqueId(),
+    scheduledAt: fireAt.toISOString()
+  };
+}
+
+// ── 2. runScheduledEmails ───────────────────────────────────────
+/**
+ * Called by the time-based trigger.
+ * Finds the draft for this trigger, sends each recipient's personalised
+ * email, records in Sent + Tracking sheets, removes the draft row,
+ * and deletes the trigger.
+ */
+function runScheduledEmails(e) {
+  // Identify which draft this trigger is for
+  const triggerId = e && e.triggerUid ? e.triggerUid : null;
+  const props     = PropertiesService.getScriptProperties();
+  const draftId   = triggerId ? props.getProperty("trigger_" + triggerId) : null;
+
+  const draftSheet = getDraftSheet();
+  const allDrafts  = sheetToObjects_(draftSheet);
+
+  // Find the target draft — by draftId if we have it, else any Scheduled rows due now
+  const now      = new Date();
+  const targets  = draftId
+    ? allDrafts.filter(r => r["Draft ID"] === draftId && r["Status"] === "Scheduled")
+    : allDrafts.filter(r => {
+        if (r["Status"] !== "Scheduled") return false;
+        const due = new Date(r["Scheduled"]);
+        return !isNaN(due.getTime()) && due <= now;
+      });
+
+  if (!targets.length) {
+    Logger.log("runScheduledEmails: no matching scheduled drafts found. triggerId=%s draftId=%s", triggerId, draftId);
+    cleanupTrigger_(triggerId, props);
+    return;
+  }
+
+  targets.forEach(draft => {
+    try {
+      sendDraft_(draft, draftSheet);
+    } catch (err) {
+      Logger.log("runScheduledEmails: error sending draft %s — %s", draft["Draft ID"], err.message);
+      // Mark draft as Failed so it's visible in the sheet
+      if (draft._rowIndex) {
+        draftSheet.getRange(draft._rowIndex, DRAFT_HEADERS.indexOf("Status") + 1)
+          .setValue("Failed: " + err.message);
+      }
+    }
+  });
+
+  cleanupTrigger_(triggerId, props);
+}
+
+// ── 3. sendDraft_ ───────────────────────────────────────────────
+function sendDraft_(draft, draftSheet) {
+  const draftId  = draft["Draft ID"];
+  const subject  = draft["Subject"];
+  const cc       = draft["CC"]  || "";
+  const bcc      = draft["BCC"] || "";
+  const key      = draft["Key"] || draftId;
+  const sentAt   = new Date();
+
+  // Parse recipients + resolved bodies from Body column
+  let parsed, recipients;
+  try {
+    parsed     = JSON.parse(draft["Body"]);
+    recipients = parsed.recipients || [];
+  } catch (_) {
+    // Fallback: plain body, send to To field as-is
+    parsed     = { html: draft["Body"], recipients: [] };
+    recipients = (draft["To"] || "").split(",").map(e => ({ email: e.trim(), resolvedBody: draft["Body"] }));
+  }
+
+  if (!recipients.length && draft["To"]) {
+    recipients = draft["To"].split(",").map(e => ({ email: e.trim(), resolvedBody: parsed.html || "" }));
+  }
+
+  const batchKey = draftId; // reuse draftId as batchKey for consistency
+
+  // Send one email per recipient with their personalised body
+  recipients.forEach(r => {
+    if (!r.email) return;
+    const opts = { htmlBody: r.resolvedBody || parsed.html || "" };
+    if (cc)  opts.cc  = cc;
+    if (bcc) opts.bcc = bcc;
+    GmailApp.sendEmail(r.email, subject, "", opts);
+
+    // Record in Tracking sheet
+    recordEmailSend({
+      batchKey:      batchKey + "-" + r.email,
+      key:           key,
+      contactName:   r.name || r.email,
+      contactRole:   "",
+      club:          "",
+      recipientEmail:r.email
+    });
+  });
+
+  // Record in Sent sheet
+  const sentSheet = getSentSheet();
+  sentSheet.appendRow([
+    batchKey,
+    key,
+    subject,
+    draft["To"],
+    cc,
+    draft["Scheduled"],
+    sentAt.toISOString(),
+    parsed.html || "",
+    draft["Template ID"] || "",
+    recipients.length
+  ]);
+
+  // Delete the draft row
+  draftSheet.deleteRow(draft._rowIndex);
+
+  Logger.log("runScheduledEmails: sent '%s' to %s recipient(s)", subject, recipients.length);
+}
+
+// ── 4. cancelScheduledTrigger_ ─────────────────────────────────
+/**
+ * Cancels the trigger for a given draftId and removes the draft row.
+ * Called by the frontend if the user deletes a scheduled draft.
+ */
+function cancelScheduledTrigger_(draftId) {
+  if (!draftId) return { success: false, error: "draftId required." };
+
+  const props    = PropertiesService.getScriptProperties();
+  const allProps = props.getProperties();
+
+  // Find and delete the trigger whose property maps to this draftId
+  let triggerDeleted = false;
+  Object.entries(allProps).forEach(([propKey, val]) => {
+    if (propKey.startsWith("trigger_") && val === draftId) {
+      const triggerId = propKey.replace("trigger_", "");
+      ScriptApp.getProjectTriggers().forEach(t => {
+        if (t.getUniqueId() === triggerId) {
+          ScriptApp.deleteTrigger(t);
+          triggerDeleted = true;
+        }
+      });
+      props.deleteProperty(propKey);
+    }
+  });
+
+  // Remove draft row
+  const draftSheet = getDraftSheet();
+  const drafts     = sheetToObjects_(draftSheet);
+  const row        = drafts.find(r => r["Draft ID"] === draftId);
+  if (row) draftSheet.deleteRow(row._rowIndex);
+
+  return { success: true, triggerDeleted };
+}
+
+// ── 5. cleanupTrigger_ ─────────────────────────────────────────
+function cleanupTrigger_(triggerId, props) {
+  if (!triggerId) return;
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getUniqueId() === triggerId) ScriptApp.deleteTrigger(t);
+  });
+  if (props) props.deleteProperty("trigger_" + triggerId);
+}
