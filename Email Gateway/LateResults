@@ -1,0 +1,80 @@
+let outstandingEvents = [], postponedEvents = [];
+const _t = s => String(s ?? '').trim();
+
+function parseCalDate(v) {                       // handles Date, "2026/10/10", ISO, "Pending 2026-10-30T…Z"
+    if (!v) return null;
+    if (v instanceof Date) return v;
+    const m = String(v).match(/\d{4}[-\/]\d{2}[-\/]\d{2}(T[\d:.]+Z)?/);
+    if (!m) return null;
+    const d = new Date(m[0].replace(/\//g, '-') + (m[1] ? '' : 'T00:00:00'));
+    return isNaN(d) ? null : d;
+}
+
+async function loadOutstanding() {
+    try {
+        const rows = await fetchSheet(DOMAIN.calendar || "calendar", "Event Data");
+        const now = new Date(), y = now.getFullYear();
+        const seasonStart = new Date(now.getMonth() >= 6 ? y : y - 1, 6, 1);
+        const seasonEnd   = new Date(seasonStart.getFullYear() + 1, 6, 1);
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+        const ev = rows.map(r => {
+            const o = Object.fromEntries(Object.entries(r).map(([k, v]) => [k.trim(), v]));
+            const orig = parseCalDate(o["Date"]), resched = parseCalDate(o["Rescheduled Date"]);
+            return { hexKey: _t(o.HexKey), raceClass: _t(o.Class), regattaType: _t(o["Regatta Type"]),
+                     round: _t(o["Round no"]), type: _t(o["Event Type"]),
+                     results: _t(o.Results).toLowerCase(), orig, resched, date: resched || orig };
+        }).filter(e => e.hexKey && e.type === 'Competition' && e.date && e.date >= seasonStart && e.date < seasonEnd);
+
+        outstandingEvents = ev.filter(e => e.results === 'not started' && e.date < today).sort((a, b) => a.date - b.date);
+        postponedEvents   = ev.filter(e => e.results === 'postponed').sort((a, b) => a.date - b.date);
+    } catch (err) {
+        outstandingEvents = postponedEvents = [];
+        showMsg('outstandingMsg', 'Error loading events: ' + err.message, true);
+    }
+    renderOutstanding();
+}
+
+function evtRow(e, actions) {
+    const name = `${e.raceClass} ${e.regattaType}${e.round ? ' Rd ' + e.round : ''}`.trim();
+    const img = getClassImage(e.raceClass);
+    const dmy = formatDateYYYYMMDD(e.date).split('/').reverse().join('/');
+    return `<div class="result-row">
+        ${img ? `<img class="row-insignia" src="${escHtml(img)}" alt="">` : '<div class="row-insignia-placeholder"></div>'}
+        <div><div class="r-name">${escHtml(name)}</div>
+        <div class="r-meta">${e.resched ? 'Rescheduled' : 'Scheduled'}: ${dmy}</div></div>
+        <div class="r-date">${dmy}</div>
+        <div class="row-actions">${actions}</div></div>`;
+}
+
+function renderOutstanding() {
+    const setStat = (stat, badge, n, red) => {
+        document.getElementById(stat).textContent = n;
+        const b = document.getElementById(badge);
+        b.className = 'badge ' + (red && n ? '' : 'badge-default');
+        b.style.cssText = red && n ? 'background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:#f87171;' : '';
+    };
+    setStat('statOutstandingResults', 'badgeOutstandingResults', outstandingEvents.length, true);
+    setStat('statPostponed', 'badgePostponed', postponedEvents.length, false);
+
+    document.getElementById('outstandingRows').innerHTML = outstandingEvents.length
+        ? outstandingEvents.map(e => evtRow(e, '')).join('')
+        : '<div class="empty-state">No outstanding results 🎉</div>';
+
+    document.getElementById('postponedRows').innerHTML = postponedEvents.length
+        ? postponedEvents.map(e => evtRow(e,
+            `<input type="date" id="rs_${escHtml(e.hexKey)}" class="search-input" style="max-width:150px;">
+             <button type="button" class="btn btn-ghost" onclick="reschedulePostponed('${escHtml(e.hexKey)}')">Reschedule</button>`)).join('')
+        : '<div class="empty-state">No postponed events</div>';
+}
+
+async function reschedulePostponed(hexKey) {
+    const v = document.getElementById('rs_' + hexKey).value;           // YYYY-MM-DD
+    if (!v) return showMsg('outstandingMsg', 'Pick a new date first.', true);
+    try {
+        await updateSheet(DOMAIN.calendar || "calendar", "Event Data", hexKey,
+            { "Rescheduled Date": v.replace(/-/g, '/'), "Results": "Not Started" });
+        showMsg('outstandingMsg', 'Event rescheduled.', false);
+        loadOutstanding();
+    } catch (err) { showMsg('outstandingMsg', 'Error: ' + err.message, true); }
+}
