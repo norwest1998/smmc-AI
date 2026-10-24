@@ -92,4 +92,5 @@ function parseSimplifiedRegattaSheet(fileId) {
     raceReport,
     races: processedRaces
   };
+  
 }
