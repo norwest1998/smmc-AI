@@ -65,6 +65,23 @@ function parseSimplifiedRegattaSheet(fileId) {
     const raceReportDate = formatDate(data.regattaDate);
     raceReport = `Race results for ${data.regattaName} sailed on the ${raceReportDate}`;
   }
+  
+  let processedRaces = data.races;
+  if (data.entries) {
+    const boatToSail = {};
+    data.entries.forEach(e => { boatToSail[e.boatId] = e.sailNo; });
+    
+    const translate = arr => (arr || []).map(id => boatToSail[id] || id);
+    processedRaces = processedRaces.map(r => ({
+      ...r,
+      positions: translate(r.positions),
+      dns: translate(r.dns),
+      dnf: translate(r.dnf),
+      raceRO: translate(r.raceRO)
+    }));
+  }
+  
+  // Return the translated processedRaces instead of data.races
 
   return {
     eventID: data.eventID,
@@ -73,6 +90,6 @@ function parseSimplifiedRegattaSheet(fileId) {
     date: data.regattaDate,
     competitorCount: data.competitorCount,
     raceReport,
-    races: data.races
+    races: processedRaces
   };
 }
