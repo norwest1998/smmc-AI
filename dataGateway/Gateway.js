@@ -142,7 +142,7 @@ const REGISTRY = [
         ClassMembers: {key: "BoatID", headerRow: 1, headers: ["BoatID","Active","Member","Class","SailNo","Model","Handicap","HRN","GH","GH HCap","Hull Colour","ClassId"]},
         Committee: {key: "Role", headerRow: 2, headers: ["Role","Member","Email","Phone #","Notify Member Application","Approve Member Application","Start of Term","End of Term","Constitutional Office Bearers"]},
         Classes: {key: "ClassID", headerRow: 1,headers: ["ClassID","ClassName","Coordinator","Restrictions","Handicap","Insignia"]},
-        Regattas: {key: "ID",headerRow: 1, headers: ["ID","ChampionshipName","Class","RegattaType","WeekofMonth","Time","Hcap Formula","<4","<7","<13","13+"]}
+        Regattas: {key: "ID",headerRow: 1, headers: ["ID","ChampionshipName","Class","RegattaType","WeekofMonth","Time","Hcap Formula","<4","<7","<13","13+","formatId","EntryRequired","RegCloseAfterRace","MinEntries","RegStatus","EligibleStarters"]}
       }
     }
   },
@@ -171,7 +171,7 @@ const REGISTRY = [
       spreadsheetId: "1AVopdio8GLzwYGQjiX7qiVBXWQVpmArmaGBLWYTHxrM",
       defaultSheet: "Event Data",
       sheets: {
-        'Event Data': {key: "HexKey", headerRow: 1,headers: ["HexKey", " Month", " Date", " Start", " Finish", " Emblem", " Class", " Regatta Type", " Event Type", " Regional Conflicts", " Season", " Round no", " Calendar Synced", " Event", " Results", " Rescheduled Date"]}
+        'Event Data': {key: "HexKey", headerRow: 1,headers: ["HexKey", "Month", "Date", "Start", "Finish", "Emblem", "Class", "Regatta Type", "Event Type", "Regional Conflicts", "Season", "Round no", "Calendar Synced", "Event", "Results", "Rescheduled Date","confRegID","EventName","RegattaID"]}
       }
     }
   },
@@ -180,7 +180,7 @@ const REGISTRY = [
       spreadsheetId: "1s9zOeaGiWEshpgWYJO_5VaF1OggvnM_b2mRVsotxcbs",
       defaultSheet: "Notes",
       sheets: {
-        Notes: {key: "NoteID", headerRow: 1,headers: ["NoteID","Date","Topic","SubTopic","Note","Attachments","CopyIn","CreatedAt","LastUpdated"]},
+        Notes: {key: "NoteID", headerRow: 1,headers: ["NoteID","Date","Topic","SubTopic","Note","Attachments","CopyIn","CreatedAt","LastUpdated","Status"]},
         Actions: {key: "ActionID", headerRow: 1,headers: ["ActionID","NoteID","Action","ActionBy","DateBy","Member","Status","CreatedAt"]}, 
         Topics: {key: "TopicID", headerRow: 1,headers: ["TopicID","Topic","CreatedAt","NoteCount"]}
       }
@@ -212,7 +212,7 @@ const REGISTRY = [
       spreadsheetId: "1FqOMVZnUbTUtruE5QJ_dmscabdMU7BuEHTfjysNuC18",
       defaultSheet: "AvgScrReq",
       sheets: {
-        AvgScrReq: {key: "Request ID", headerRow: 1,headers: ["Request ID","Timestamp","Member Name","Member Email","EventID","Date","Class","Regatta Type","Conflicting Regatta","Status","Rejected Reason","Decision By","Decision Date","Email Sent"]}
+        AvgScrReq: {key: "Request ID", headerRow: 1, headers: ["Request ID","Timestamp","Member Name","Member Email","BoatID","EventID","Date","Class","Regatta Type","Event Name","Conflicting Regatta","ConfRegID","Status","Rejected Reason","Decision By","Decision Date","Email Sent"]}
       }
     }
   },
@@ -233,6 +233,19 @@ const REGISTRY = [
         Queue: {key: "PostID", headerRow: 1,headers: ["Status","SpreadsheetId","SheetId","SpreadsheetName","SheetName","RegattaName","RaceDate","RaceReport","Created","Started","PostID","Completed","Error"]}
       }
     }
+  },
+  {
+    racing: {
+      spreadsheetId: "1zoB6C-54EGanjw1FTI1lGtxSia-BAvcBySbAtI1-qr0",
+      defaultSheet: "RacingFormats",
+      sheets: {
+        RacingFormats: {key: "formatID", headerRow: 1,headers: ["formatId","name","description","scoringSystem","discardsRule","allowedClassIds","active","WeightingFormat"]},
+        RaceSpecs: {key: "specID", headerRow: 1,headers: ["specId","formatId","sequence","raceType","count","weight","configJson","active"]},
+        Series:    {key:"ID",       headerRow:1, headers:["ID","SeriesName","AllowedClasses","WeekofMonth","Time","Coordinator","FormatID","EntryRequired","EntryType","HandicapTracking","Insignia","MinEntries","RegCloseAfterRace","SpreadsheetID","RegStatus","EligibleStarters","SeriesWinner","RunnerUp","WinnerPoints"]},
+        SeriesEntries: {key: "EntryID", headerRow: 1, headers: ["EntryID","SeriesID","MemberID","BoatID","StartingHandicap","CurrentHandicap","SeriesPoints","Status","Season","Timestamp","SeedOverride"]},
+        Matches:   {key: "matchId", headerRow: 1, headers: ["matchId","seriesId","season","stage","round","matchNo","memberA","memberB","winner","status","pointsA","pointsB"]}
+      }
+    }
   }
 ];
 
@@ -241,19 +254,6 @@ function doGet(e) {
   const action = params.action;
   return handleAction(action, params);
 }
-
-/* function doPost(e) {
-  let payload = {};
-  try {
-    payload = e.postData && e.postData.contents ? JSON.parse(e.postData.contents) : {};
-    const action = payload.action || (e.parameter ? e.parameter.action : undefined);
-    return handleAction(action, payload, e);
-  } catch (err) {
-      return ContentService.createTextOutput(JSON.stringify({ error: err.message }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-*/
 
 function doPost(e) {
   let payload = {};
@@ -287,8 +287,6 @@ function doPost(e) {
   }
 }
 
-
-
 function handleAction(action, payload,e) {
   try {
 
@@ -302,6 +300,10 @@ function handleAction(action, payload,e) {
  
     
     switch (action) {
+      case "getMyProfile":    return json({ success: true, ...getMyProfile_(CURRENT_USER) });
+      case "updateMyProfile": return json({ success: true, ...updateMyProfile_(CURRENT_USER, payload.fields || {}, payload.boats || []) });
+      case "addMyBoat":       return json({ success: true, ...addMyBoat_(CURRENT_USER, payload.boat || {}) });
+
       case "passwordLogin": {
         const s = passwordLogin(payload.userId, payload.password);
         return s ? json({ success: true, ...s }) : json({ code: "AUTH", error: "Invalid userid or password" });
@@ -387,6 +389,8 @@ function handleAction(action, payload,e) {
           }
         });
         return json({ success: true, results: batchResults });
+
+        case "genReport": return json({ report: genRaceReportFromData(payload.data) });
         
         case "appendAvgScrReq": {
             const r = payload.rowData || {};
@@ -404,6 +408,10 @@ function handleAction(action, payload,e) {
             // domain/sheet are hardcoded so the client can't target another sheet
             return appendAverageScoreRequest("appendAvgScrReq", "requests", "AvgScrReq", r);
           }
+
+          case "seriesOverview": return json({ success: true, values: seriesOverview_() });
+          case "registerSeries": return json({ success: true, ...registerSeries_(payload.regattaId, payload.boatId) });
+          case "withdrawSeries": return json({ success: true, ...withdrawSeries_(payload.entryId) });
 
     }
     
@@ -452,7 +460,8 @@ function handleAction(action, payload,e) {
     const headerRow   = (config?.headerRow ?? 1) - 1;           
     const regHeaders  = config?.headers ?? null;
     const keyField    = getKeyField(domain, sheetName);
-    const headers     = regHeaders ?? allValues[headerRow].map(h => String(h).trim());
+    const sheetHeaders = allValues[headerRow] ? allValues[headerRow].map(h => String(h).trim()) : [];
+    const headers      = sheetHeaders.length > 0 ? sheetHeaders : (regHeaders ?? []);
     const dataRows    = allValues.slice(headerRow + 1);         
     const keyCol      = headers.indexOf(keyField);        
 
@@ -495,9 +504,14 @@ function handleAction(action, payload,e) {
         } 
 
         let updatedCount = 0;
+        const norm = s => String(s || "").trim().toLowerCase();
+
         Object.entries(updates).forEach(([field, value]) => {
-          const col = headers.indexOf(field);
-          if (col === -1) return;
+          const col = headers.findIndex(h => norm(h) === norm(field));
+          if (col === -1) {
+            console.warn(`Column "${field}" not found in sheet "${sheetName}". Available headers:`, headers);
+            return;
+          }
 
           const before = dataRows[dataRowIndex][col];
 
@@ -507,9 +521,11 @@ function handleAction(action, payload,e) {
             updatedCount++;
           }
         });
-        
+
         if (updatedCount > 0) {
-            clearSheetCache(domain, sheetName);
+          clearSheetCache(domain, sheetName);
+        } else if (Object.keys(updates).length > 0) {
+          return json({ success: false, error: `No matching columns updated for fields: ${Object.keys(updates).join(", ")}` });
         }
         return json({ success: true, updatedCount });
 
@@ -663,9 +679,10 @@ function appendAverageScoreRequest(action, domain, sheet, rowData) {
     rowData.conflictingRegatta || "",
     rowData.confRegId || "",
     rowData.status || "Received",
-    "", // Decision Date
+    "", // Rejected Reason
     "", // Decision By
-    ""  // Rejected Reason
+    "", // Decision Date
+    ""  // Email Sent
   ];
 
   avgSheet.appendRow(newRow);
@@ -986,4 +1003,77 @@ function formatVariableRegistrySheet(sheet, totalRows, totalCols) {
   for (let c = 1; c <= totalCols; c++) {
     sheet.autoResizeColumn(c);
   }
+}
+
+const norm_ = s => String(s ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+const col_  = (h, n) => h.findIndex(x => norm_(x) === norm_(n));
+
+const SELF_EDITABLE = ['Phone','Address Line','Suburb','PCode','Emergency Contact Name','Emergency Contact Number','WhatsApp'];
+const BOAT_EDITABLE = ['Class','SailNo','Model','HRN','GH','Active'], BOAT_BOOL = ['GH','Active'];
+const clean_ = v => safeText_(String(v ?? "").slice(0, 200));
+const toObj_ = (h, r) => Object.fromEntries(h.map((k, i) => [k, r[i] instanceof Date ? r[i].toISOString() : r[i]]));
+
+function myBoatRows_(name) {
+  const sh = getSheet("members", "ClassMembers"), v = sh.getDataRange().getValues();
+  const h = v[0].map(x => String(x).trim()), mc = h.indexOf("Member");
+  const rows = []; v.forEach((r, i) => { if (i && String(r[mc]).trim() === name) rows.push({ r, rowNum: i + 1 }); });
+  return { sh, h, rows };
+}
+function classTable_() {
+  const v = getSheet("members", "Classes").getDataRange().getValues(), h = v[0].map(x => String(x).trim());
+  return v.slice(1).map(r => ({ id: r[h.indexOf("ClassID")], name: String(r[h.indexOf("ClassName")]).trim() })).filter(c => c.name);
+}
+
+function myMemberRow_(email) {
+  const sh = getSheet("members", "Members"), v = sh.getDataRange().getValues();
+  const h = v[0].map(x => String(x).trim()), ec = col_(h, "Email");
+  const r = v.findIndex((row, i) => i && norm_(row[ec]) === norm_(email));
+  if (r < 0) throw new Error("No member record matches " + email);
+  const get = k => { const i = col_(h, k); return i < 0 ? "" : v[r][i]; };
+  const name = String(get("MemberName") || (get("FirstName") + " " + get("LastName"))).trim();
+  return { sh, h, row: v[r], rowNum: r + 1, name, get };
+}
+
+function getMyProfile_(email) {
+  const m = myMemberRow_(email);
+  const member = { MemberName: m.name, email, Membershiptype: m.get("Membershiptype"), "Paid up": m.get("Paid up") };
+  SELF_EDITABLE.forEach(k => member[k] = m.get(k));
+  const b = myBoatRows_(m.name);
+  return { member, boats: b.rows.map(x => toObj_(b.h, x.r)), classes: classTable_().map(c => c.name) };
+}
+
+function addMyBoat_(email, b) {
+  const m = myMemberRow_(email), cls = clean_(b.Class), sail = clean_(b.SailNo);
+  if (!cls && !sail) throw new Error("Select a Class or provide a Sail Number.");
+  const bt = myBoatRows_(m.name), ct = classTable_().find(c => c.name === cls);
+  const rec = { BoatID: Utilities.getUuid().replace(/-/g, "").slice(0, 8), Active: true, Member: m.name, Class: cls, SailNo: sail,
+    Model: clean_(b.Model), HRN: clean_(b.HRN), GH: b.GH === true || b.GH === "true", ClassId: ct ? ct.id : "" };
+  bt.sh.appendRow(bt.h.map(k => rec[k] ?? ""));
+  auditLog("append", "members", "ClassMembers", rec.BoatID, "", "", rec, "Success");
+  clearSheetCache("members", "ClassMembers");
+  const nb = myBoatRows_(m.name);
+  return { boats: nb.rows.map(x => toObj_(nb.h, x.r)) };
+}
+
+
+function updateMyProfile_(email, f, boats) {
+  const m = myMemberRow_(email); let n = 0;
+  SELF_EDITABLE.forEach(k => {
+    const c = col_(m.h, k); if (!(k in f) || c < 0) return;
+    const val = k === "WhatsApp" ? (f[k] === true || f[k] === "true") : clean_(f[k]);
+    if (isValueChanged(m.row[c], val)) { m.sh.getRange(m.rowNum, c + 1).setValue(val); auditLog("update","members","Members",email,k,m.row[c],val,"Success"); n++; }
+  });
+  const b = myBoatRows_(m.name); 
+  const idc = col_(b.h, "BoatID");
+  boats.forEach(u => {
+    const t = b.rows.find(x => String(x.r[idc]).trim() === String(u.BoatID).trim());   // only this member's own boats
+    if (!t) return;
+    BOAT_EDITABLE.forEach(k => {
+      const c = col_(b.h, k); if (!(k in u) || c < 0) return;
+      const val = BOAT_BOOL.includes(k) ? (u[k] === true || u[k] === "true") : clean_(u[k]);
+      if (isValueChanged(t.r[c], val)) { b.sh.getRange(t.rowNum, c + 1).setValue(val); auditLog("update","members","ClassMembers",u.BoatID,k,t.r[c],val,"Success"); n++; }
+    });
+  });
+  if (n) { clearSheetCache("members", "Members"); clearSheetCache("members", "ClassMembers"); }
+  return { updated: n };
 }

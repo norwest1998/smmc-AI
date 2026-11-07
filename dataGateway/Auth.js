@@ -2,22 +2,25 @@ const GOOGLE_CLIENT_ID = "738246015685-4vk2o2l7nit598jvkl8r423sa4hff8rf.apps.goo
 const TOKEN_TTL_MS     = 60 * 60 * 1000;
 const PUBLIC_ACTIONS = ["login", "requestCode", "verifyCode", "passwordLogin"];
 const DENY_SHEETS      = ["apps|Tokens", "audit|Users"];
+const VALID_ROLES = ["viewer", "coord", "editor", "admin"];
+const VALID_LOGIN = ["google", "code", "password"];
 const PERMS = { viewer:["read"], editor:["read","write"], admin:["read","write","delete","admin"] };
 const ROLE_DOMAINS = {
-  viewer: { members:"r", documents:"r", calendar:"r", notes:"r", results:"r", tracking:"r", apps:"r", requests:"rw", media:"r"  },
-  coord: { members:"r", documents:"r", calendar:"r", notes:"r", results:"rw", tracking:"r", apps:"r", requests:"rw", media:"r"  },
-  editor: { members:"rw", documents:"rw", calendar:"rw", notes:"rw", results:"rw", tracking:"rw", apps:"rw", requests:"rw", media:"rw" },
+  viewer: { members:"r", documents:"r", calendar:"r", notes:"r", results:"r", tracking:"r", apps:"r", requests:"rw", media:"r", racing:"r" },
+  coord: { members:"r", documents:"r", calendar:"r", notes:"r", results:"rw", tracking:"r", apps:"r", requests:"rw", media:"r", racing:"rw" },
+  editor: { members:"rw", documents:"rw", calendar:"rw", notes:"rw", results:"rw", tracking:"rw", apps:"rw", requests:"rw", media:"rw", racing:"rw"},
   admin:  { members:"rwd", documents:"rwd", calendar:"rwd", notes:"rwd", results:"rwd", tracking:"rwd",
-            apps:"rwd", requests:"rwd", audit:"rwd", media:"rwd" }
+            apps:"rwd", requests:"rwd", audit:"rwd", media:"rwd", racing:"rwd" }
 };
-const ACTION_CODE = { fetch:"r", search:"r", batchFetch:"r", layout:"r", append:"w", update:"w", delete:"d", appendAvgScrReq:"w" };
-const ANY_ROLE    = ["getRegistry", "changePassword", "listFolder", "readFile", "registerSchema"];
+const ACTION_CODE = { fetch:"r", search:"r", batchFetch:"r", layout:"r", append:"w", update:"w", delete:"d", appendAvgScrReq:"w", genReport:"w" };
+const ANY_ROLE    = ["getRegistry", "changePassword", "listFolder", "readFile", "registerSchema","seriesOverview", "registerSeries", "withdrawSeries","getMyProfile","updateMyProfile","addMyBoat"];
 const ADMIN_ONLY = ["refreshCache", "resetPassword", "listUsers", "createUser", "updateUser", "addUser"];
 const ACTION_TYPE = {
   fetch:"read", batchFetch:"read", layout:"read", getRegistry:"read", registerSchema:"read",
   append:"write", appendAvgScrReq:"write", update:"write", delete:"delete", refreshCache:"admin",
   listFolder:"read", readFile:"read", triggerResults:"write"
 };
+const MEMBER_PROTECTED = ["racing|SeriesEntries"];
 var CURRENT_USER = "unknown", CURRENT_ROLE = "";
 
 function _sig(b) {
@@ -89,6 +92,8 @@ function authorize(action, payload) {
 function checkAccess(domain, sheet, code) {
   sheet = sheet || getRegistryEntry(domain).defaultSheet;
   if (DENY_SHEETS.includes(domain + "|" + sheet)) throw new Error("Forbidden");
+  if (MEMBER_PROTECTED.includes(domain + "|" + sheet) &&
+    !(code === "r" ? ["coord","editor","admin"] : ["editor","admin"]).includes(CURRENT_ROLE)) throw new Error("Forbidden");
   if (!(ROLE_DOMAINS[CURRENT_ROLE]?.[domain] || "").includes(code)) throw new Error("Forbidden: " + domain);
 }
 
@@ -191,8 +196,6 @@ function resetPassword(email) {                   // admin action, or run from t
   MailApp.sendEmail(row.Email, "SMMC temporary password", "Your temporary password is: " + temp + "\nYou must change it when you first sign in.");
 }
 function resetFromEditor() { resetPassword("someone@example.com"); }   // bootstrap your first password user
-
-const VALID_ROLES = ["viewer", "editor", "admin"], VALID_LOGIN = ["google", "code", "password"];
 
 function requireAdmin_(payload) {
   const p = verifyToken(payload.token), u = p && lookupUser(p.email);
