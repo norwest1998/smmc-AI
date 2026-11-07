@@ -1049,7 +1049,7 @@ function addMyBoat_(email, b) {
   const rec = { BoatID: Utilities.getUuid().replace(/-/g, "").slice(0, 8), Active: true, Member: m.name, Class: cls, SailNo: sail,
     Model: clean_(b.Model), HRN: clean_(b.HRN), GH: b.GH === true || b.GH === "true", ClassId: ct ? ct.id : "" };
   bt.sh.appendRow(bt.h.map(k => rec[k] ?? ""));
-  auditLog("append", "members", "ClassMembers", rec.BoatID, "", "", rec, "Success");
+  mpAudit_("append", "ClassMembers", rec.BoatID, "Boat added", "", rec);
   clearSheetCache("members", "ClassMembers");
   const nb = myBoatRows_(m.name);
   return { boats: nb.rows.map(x => toObj_(nb.h, x.r)) };
