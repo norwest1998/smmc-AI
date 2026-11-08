@@ -301,8 +301,8 @@ function handleAction(action, payload,e) {
     
     switch (action) {
       case "getMyProfile":    return json({ success: true, ...getMyProfile_(CURRENT_USER) });
-      case "updateMyProfile": return json({ success: true, ...updateMyProfile_(CURRENT_USER, payload.fields || {}, payload.boats || []) });
-      case "addMyBoat":       return json({ success: true, ...addMyBoat_(CURRENT_USER, payload.boat || {}) });
+      case "updateMyProfile": return mpGuard_("update", "Members", () => updateMyProfile_(CURRENT_USER, payload.fields || {}, payload.boats || []));
+      case "addMyBoat":       return mpGuard_("append", "ClassMembers", () => addMyBoat_(CURRENT_USER, payload.boat || {}));
 
       case "passwordLogin": {
         const s = passwordLogin(payload.userId, payload.password);
@@ -438,6 +438,8 @@ function handleAction(action, payload,e) {
     }
 
     if (action === "fetch") {
+      if (domain === "audit" && sheetName === "AuditLog" && CURRENT_ROLE !== "admin")
+        return json({ values: filterAuditForRole_(getSheetDataCached(domain, sheetName)) });
       checkAccess(domain, sheetName, ACTION_CODE[action]);
       return json({ values: getSheetDataCached(domain, sheetName) });
     }
@@ -542,6 +544,11 @@ function handleAction(action, payload,e) {
 function json(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function filterAuditForRole_(rows) {
+  const allowed = ROLE_DOMAINS[CURRENT_ROLE] || {};
+  return rows.filter(r => (allowed[String(r["Domain"] || "").trim().toLowerCase()] || "").includes("r"));
 }
 
 // ── Registry Helpers ──────────────────────────────────────────────
@@ -1005,73 +1012,80 @@ function formatVariableRegistrySheet(sheet, totalRows, totalCols) {
   }
 }
 
-const norm_ = s => String(s ?? "").replace(/\s+/g, " ").trim().toLowerCase();
-const col_  = (h, n) => h.findIndex(x => norm_(x) === norm_(n));
+const mpNorm_ = s => String(s ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+const mpCol_  = (h, n) => h.findIndex(x => mpNorm_(x) === mpNorm_(n));
+const MP_SELF = ['Phone','Address Line','Suburb','PCode','Emergency Contact Name','Emergency Contact Number','WhatsApp'];
+const MP_BOAT = ['Class','SailNo','Model','HRN','GH','Active'], MP_BOAT_BOOL = ['GH','Active'];
+const mpClean_ = v => safeText_(String(v ?? "").slice(0, 200));
+const mpObj_ = (h, r) => Object.fromEntries(h.map((k, i) => [k, r[i] instanceof Date ? r[i].toISOString() : r[i]]));
 
-const SELF_EDITABLE = ['Phone','Address Line','Suburb','PCode','Emergency Contact Name','Emergency Contact Number','WhatsApp'];
-const BOAT_EDITABLE = ['Class','SailNo','Model','HRN','GH','Active'], BOAT_BOOL = ['GH','Active'];
-const clean_ = v => safeText_(String(v ?? "").slice(0, 200));
-const toObj_ = (h, r) => Object.fromEntries(h.map((k, i) => [k, r[i] instanceof Date ? r[i].toISOString() : r[i]]));
+const mpAudit_ = (action, sheet, id, field, before, after, ok) =>
+  auditLog(action, "members", sheet, id, "My Details" + (field ? ": " + field : ""), before, after, ok || "Success");
 
-function myBoatRows_(name) {
-  const sh = getSheet("members", "ClassMembers"), v = sh.getDataRange().getValues();
-  const h = v[0].map(x => String(x).trim()), mc = h.indexOf("Member");
-  const rows = []; v.forEach((r, i) => { if (i && String(r[mc]).trim() === name) rows.push({ r, rowNum: i + 1 }); });
-  return { sh, h, rows };
-}
-function classTable_() {
-  const v = getSheet("members", "Classes").getDataRange().getValues(), h = v[0].map(x => String(x).trim());
-  return v.slice(1).map(r => ({ id: r[h.indexOf("ClassID")], name: String(r[h.indexOf("ClassName")]).trim() })).filter(c => c.name);
+function mpGuard_(action, sheet, fn) {
+  try { return json({ success: true, ...fn() }); }
+  catch (err) { mpAudit_(action, sheet, CURRENT_USER, "", "", "ERROR: " + err.message, "Failed"); throw err; }
 }
 
 function myMemberRow_(email) {
   const sh = getSheet("members", "Members"), v = sh.getDataRange().getValues();
-  const h = v[0].map(x => String(x).trim()), ec = col_(h, "Email");
-  const r = v.findIndex((row, i) => i && norm_(row[ec]) === norm_(email));
+  const h = v[0].map(x => String(x).trim()), ec = mpCol_(h, "Email");
+  const r = v.findIndex((row, i) => i && mpNorm_(row[ec]) === mpNorm_(email));
   if (r < 0) throw new Error("No member record matches " + email);
-  const get = k => { const i = col_(h, k); return i < 0 ? "" : v[r][i]; };
+  const get = k => { const i = mpCol_(h, k); return i < 0 ? "" : v[r][i]; };
   const name = String(get("MemberName") || (get("FirstName") + " " + get("LastName"))).trim();
   return { sh, h, row: v[r], rowNum: r + 1, name, get };
 }
 
+function myBoatRows_(name) {
+  const sh = getSheet("members", "ClassMembers"), v = sh.getDataRange().getValues();
+  const h = v[0].map(x => String(x).trim()), mc = mpCol_(h, "Member");
+  const rows = []; v.forEach((r, i) => { if (i && mpNorm_(r[mc]) === mpNorm_(name)) rows.push({ r, rowNum: i + 1 }); });
+  return { sh, h, rows };
+}
+
+function classTable_() {
+  const v = getSheet("members", "Classes").getDataRange().getValues(), h = v[0].map(x => String(x).trim());
+  return v.slice(1).map(r => ({ id: r[mpCol_(h, "ClassID")], name: String(r[mpCol_(h, "ClassName")]).trim() })).filter(c => c.name);
+}
+
 function getMyProfile_(email) {
   const m = myMemberRow_(email);
+  const rid = m.get("MemberID") || email;  
   const member = { MemberName: m.name, email, Membershiptype: m.get("Membershiptype"), "Paid up": m.get("Paid up") };
-  SELF_EDITABLE.forEach(k => member[k] = m.get(k));
+  MP_SELF.forEach(k => member[k] = m.get(k));
   const b = myBoatRows_(m.name);
-  return { member, boats: b.rows.map(x => toObj_(b.h, x.r)), classes: classTable_().map(c => c.name) };
+  return { member, boats: b.rows.map(x => mpObj_(b.h, x.r)), classes: classTable_().map(c => c.name) };
 }
 
 function addMyBoat_(email, b) {
-  const m = myMemberRow_(email), cls = clean_(b.Class), sail = clean_(b.SailNo);
+  const m = myMemberRow_(email), cls = mpClean_(b.Class), sail = mpClean_(b.SailNo);
   if (!cls && !sail) throw new Error("Select a Class or provide a Sail Number.");
   const bt = myBoatRows_(m.name), ct = classTable_().find(c => c.name === cls);
   const rec = { BoatID: Utilities.getUuid().replace(/-/g, "").slice(0, 8), Active: true, Member: m.name, Class: cls, SailNo: sail,
-    Model: clean_(b.Model), HRN: clean_(b.HRN), GH: b.GH === true || b.GH === "true", ClassId: ct ? ct.id : "" };
+    Model: mpClean_(b.Model), HRN: mpClean_(b.HRN), GH: b.GH === true || b.GH === "true", ClassId: ct ? ct.id : "" };
   bt.sh.appendRow(bt.h.map(k => rec[k] ?? ""));
   mpAudit_("append", "ClassMembers", rec.BoatID, "Boat added", "", rec);
   clearSheetCache("members", "ClassMembers");
   const nb = myBoatRows_(m.name);
-  return { boats: nb.rows.map(x => toObj_(nb.h, x.r)) };
+  return { boats: nb.rows.map(x => mpObj_(nb.h, x.r)) };
 }
-
 
 function updateMyProfile_(email, f, boats) {
   const m = myMemberRow_(email); let n = 0;
-  SELF_EDITABLE.forEach(k => {
-    const c = col_(m.h, k); if (!(k in f) || c < 0) return;
-    const val = k === "WhatsApp" ? (f[k] === true || f[k] === "true") : clean_(f[k]);
-    if (isValueChanged(m.row[c], val)) { m.sh.getRange(m.rowNum, c + 1).setValue(val); auditLog("update","members","Members",email,k,m.row[c],val,"Success"); n++; }
+  MP_SELF.forEach(k => {
+    const c = mpCol_(m.h, k); if (!(k in f) || c < 0) return;
+    const val = k === "WhatsApp" ? (f[k] === true || f[k] === "true") : mpClean_(f[k]);
+    if (isValueChanged(m.row[c], val)) { m.sh.getRange(m.rowNum, c + 1).setValue(val); mpAudit_("update", "Members", rid, k, m.row[c], val); n++; }
   });
-  const b = myBoatRows_(m.name); 
-  const idc = col_(b.h, "BoatID");
+  const b = myBoatRows_(m.name), idc = mpCol_(b.h, "BoatID");
   boats.forEach(u => {
     const t = b.rows.find(x => String(x.r[idc]).trim() === String(u.BoatID).trim());   // only this member's own boats
     if (!t) return;
-    BOAT_EDITABLE.forEach(k => {
-      const c = col_(b.h, k); if (!(k in u) || c < 0) return;
-      const val = BOAT_BOOL.includes(k) ? (u[k] === true || u[k] === "true") : clean_(u[k]);
-      if (isValueChanged(t.r[c], val)) { b.sh.getRange(t.rowNum, c + 1).setValue(val); auditLog("update","members","ClassMembers",u.BoatID,k,t.r[c],val,"Success"); n++; }
+    MP_BOAT.forEach(k => {
+      const c = mpCol_(b.h, k); if (!(k in u) || c < 0) return;
+      const val = MP_BOAT_BOOL.includes(k) ? (u[k] === true || u[k] === "true") : mpClean_(u[k]);
+      if (isValueChanged(t.r[c], val)) { b.sh.getRange(t.rowNum, c + 1).setValue(val); mpAudit_("update", "ClassMembers", u.BoatID, k, t.r[c], val); n++; }
     });
   });
   if (n) { clearSheetCache("members", "Members"); clearSheetCache("members", "ClassMembers"); }
