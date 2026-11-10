@@ -74,7 +74,7 @@ function lrRun_(dry) {
       const b = String(r[TC.BATCH_KEY - 1]);
       if (b.indexOf('LATE-') !== 0) return;
       const d = r[TC.DATE_SENT - 1] instanceof Date ? r[TC.DATE_SENT - 1] : new Date(r[TC.DATE_SENT - 1]);
-      (hist[b] = hist[b] || []).push({ rowNum: i + 2, status: r[TC.STATUS - 1], sent: d });
+      (hist[b] = hist[b] || []).push({ key: String(r[TC.KEY - 1]), status: r[TC.STATUS - 1], sent: d });
     });
 getProp_
     const sender = getProp_('SENDER_NAME') || 'SMMC Admin';
@@ -122,40 +122,24 @@ getProp_
       const pixel = webAppUrl
         ? '<img src="' + webAppUrl + '?key=' + encodeURIComponent(key) + '&t=' + Date.now() + '" width="1" height="1" style="display:none" alt="">'
         : '';
-      const html = lrFill_(tpl.body, vars) + tpl.sig + pixel;
+      const html = lrFill_(tpl.body, vars) + tpl.sig;
       const cc = lrUnique_(roleCc.concat(tpl.cc.split(/[,;]/)).map(s => s.trim()).filter(Boolean))
                    .filter(e => lrN_(e) !== lrN_(to)).join(',');
 
       if (dry) { Logger.log('DRY RUN #%s -> %s (cc: %s) | %s | %s', n, to, cc, subject, link); return; }
 
-      const opts = { htmlBody: html, name: sender };
-      if (cc) opts.cc = cc;
-      if (tpl.bcc.trim()) opts.bcc = tpl.bcc.trim();
-      try {
-        GmailApp.sendEmail(to, subject, lrText_(html), opts);
-      } catch (err) {
-        Logger.log('SEND FAILED %s -> %s: %s', evName, to, err.message);
-        return;
-      }
-
-      let threadId = '';
-      try {
-        const q = 'to:"' + to + '" subject:"' + subject.replace(/"/g, '\\"') + '" newer_than:1d';
-        const th = GmailApp.search(q, 0, 1);
-        if (th.length) threadId = th[0].getId();
-      } catch (err) { /* non-fatal */ }
-
-      track.appendRow([
-        batchKey, 'SMMC', coord, 'Class Coordinator', 'Sent', key,
-        new Date(), '', '', '', '', 'No',
-        'Late results reminder #' + n + ' - ' + evName + ' ' + dateStr, threadId, to, '', 0
-      ]);
-      prior.forEach(h => track.getRange(h.rowNum, TC.REMINDER_SENT).setValue('Yes'));   // earlier rows were chased
-      (hist[batchKey] = hist[batchKey] || []).push({ rowNum: track.getLastRow(), status: 'Sent', sent: new Date() });
+      const x = deliver_({ batchKey, subject, cc, bcc: tpl.bcc.trim(), recipients: [{ email: to, name: coord, key, resolvedBody: html }] })[0];
+      if (!x.ok) { Logger.log('SEND FAILED %s -> %s: %s', evName, to, x.error); return; }
+      dataGw_('append', 'Tracking', { rowData: {
+        'Batch Key': batchKey, 'Club': 'SMMC', 'Contact Name': coord, 'Contact Role': 'Class Coordinator', 'Email Status': 'Sent',
+        'Key': key, 'Date Sent': new Date().toISOString(), 'Reminder Sent': 'No',
+        'Comments': 'Late results reminder #' + n + ' - ' + evName + ' ' + dateStr,
+        'Thread ID': x.threadId || '', 'Recipient Email': to, 'Open Count': 0 } });
+      prior.forEach(h => dataGw_('update', 'Tracking', { hexKey: h.key, update: { 'Reminder Sent': 'Yes' } }));
+      (hist[batchKey] = hist[batchKey] || []).push({ key, status: 'Sent', sent: new Date() });   // earlier rows were chased
 
       upsertDashboardRow_(batchKey, 'Late results: ' + evName + ' ' + dateStr, new Date());
       refreshDashboardStats_(batchKey);
-      appendAuditLog_(batchKey, 'SMMC', TRACKING_SHEET, 'Late results reminder #' + n + ' (' + evName + ')', '', 'Sent to ' + coord);
       sent++;
     });
 
@@ -166,6 +150,13 @@ getProp_
 }
 
 // ---------- HELPERS ----------
+
+function centralAudit_(action, domain, sheet, id, detail, before, after, ok) {
+  try {
+    const sh = SpreadsheetApp.openById( ).getSheetByName('AuditLog');
+    sh.appendRow([id, new Date().toISOString(), 'SMMC Auto Bot', action, domain, sheet, detail, before, after, ok || 'Success']);
+  } catch (e) { console.error('Central audit failed:', e.message); }
+}
 
 const lrN_ = s => String(s === null || s === undefined ? '' : s).replace(/\s+/g, ' ').trim().toLowerCase();
 const lrDay_ = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
