@@ -20,7 +20,7 @@ const EMAIL_TRACKING_HEADERS = [
 
 function getTrackingSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetName = "Email Tracking";
+  const sheetName = "Tracking";
   let sheet = ss.getSheetByName(sheetName);
 
   if (!sheet) {
@@ -38,6 +38,20 @@ function getTrackingSheet() {
 
 function generateTrackingKey() {
   return Utilities.getUuid();
+}
+
+function markTracking_(batchKeyEmail, status, threadId) {
+  const sh = getOrCreateSheet_(TRACKING_SHEET, EMAIL_TRACKING_HEADERS);
+  const v = sh.getDataRange().getValues(), h = v[0].map(String), c = n => h.indexOf(n) + 1;
+  for (let i = 1; i < v.length; i++) {
+    if (String(v[i][0]) === batchKeyEmail) {
+      sh.getRange(i + 1, c("Email Status")).setValue(status);
+      if (status === "Sent") sh.getRange(i + 1, c("Date Sent")).setValue(new Date());
+      if (threadId) sh.getRange(i + 1, c("Thread ID")).setValue(threadId);
+      return true;
+    }
+  }
+  return false;
 }
 
 function recordEmailSend({ batchKey, club, contactName, contactRole, recipientEmail, key }) {
@@ -133,22 +147,36 @@ function listTrackingRecords() {
     });
 }
 
-function doGet() { return json({ success: false, error: "Use POST" }); }
-
 function doPost(e) {
   const raw = e && e.postData && e.postData.contents ? e.postData.contents : "{}";
   try {
     const payload = JSON.parse(raw);
     const action  = payload.action || "recordSend";
-    if (action !== "markOpened" && !verifyToken(payload.token))   // markOpened stays public for the open-tracker
-        return json({ success: false, code: "AUTH", error: "Unauthorized" });
+    const PUBLIC  = ["markOpened"];                       // open-tracker stays public
+    const WRITERS = ["editor", "coord", "admin"];
+
+    const tok = verifyToken(payload.token);
+    if (action !== "markOpened" && !tok)
+         return json({ success: false, code: "AUTH", error: "Unauthorized" });
+
+    if (!PUBLIC.includes(action)) {
+      const p = verifyToken(payload.token);
+      if (!p) return json({ success: false, code: "AUTH", error: "Unauthorized" });
+      if (p.mc) return json({ success: false, code: "AUTH", error: "Password change required" });
+      const readOnly = ["list", "find"].includes(action);
+      if (!readOnly && !WRITERS.includes(p.role))
+        return json({ success: false, code: "FORBIDDEN", error: "Forbidden" });
+    }
 
     switch (action) {
+      case "fetchEmail":       return json({ success: true, values: fetchEmail_(payload.sheet, tok) });
+      case "sendNow":          return json(sendNow_(payload, tok));
+      case "refreshDashboard": return json(refreshDashboard_(payload, tok));
+
       case "list":
         return json({ success: true, records: listTrackingRecords() });
       case "find":
         return json({ success: true, records: findTrackingRecords(payload.key || payload.id || "") });
-      // ── existing actions ──────────────────────────────────────
       case "recordSend":
         return json({ success: true, batchKey: recordEmailSend(payload) });
       case "markUpdated":
@@ -157,11 +185,14 @@ function doPost(e) {
         return json({ success: markEmailOpened(payload.key, payload.openedAt) });
       case "markReminderSent":
         return json({ success: markReminderSent(payload.key) });
-      // ── new scheduled-email actions ───────────────────────────
       case "createScheduledTrigger":
+        needEditor_(tok);
         return json(createScheduledTrigger_(payload));
       case "cancelScheduledTrigger":
+        needEditor_(tok);
         return json(cancelScheduledTrigger_(payload.draftId));
+      case "sendNow":
+        return json(sendNow_(payload));
       default:
         return json({ success: false, error: `Unknown action: ${action}` });
     }

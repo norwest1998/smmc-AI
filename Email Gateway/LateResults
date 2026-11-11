@@ -76,9 +76,9 @@ function lrRun_(dry) {
       const d = r[TC.DATE_SENT - 1] instanceof Date ? r[TC.DATE_SENT - 1] : new Date(r[TC.DATE_SENT - 1]);
       (hist[b] = hist[b] || []).push({ key: String(r[TC.KEY - 1]), status: r[TC.STATUS - 1], sent: d });
     });
-getProp_
+
     const sender = getProp_('SENDER_NAME') || 'SMMC Admin';
-    const webAppUrl = ('WEBAPP_URL');
+    const webAppUrl = getProp_('WEBAPP_URL');
     if (!webAppUrl) Logger.log('WARNING: WEBAPP_URL not set - emails will send without the open pixel.');
 
     let sent = 0;
@@ -136,10 +136,11 @@ getProp_
         'Comments': 'Late results reminder #' + n + ' - ' + evName + ' ' + dateStr,
         'Thread ID': x.threadId || '', 'Recipient Email': to, 'Open Count': 0 } });
       prior.forEach(h => dataGw_('update', 'Tracking', { hexKey: h.key, update: { 'Reminder Sent': 'Yes' } }));
-      (hist[batchKey] = hist[batchKey] || []).push({ key, status: 'Sent', sent: new Date() });   // earlier rows were chased
+      (hist[batchKey] = hist[batchKey] || []).push({ key, status: 'Sent', sent: new Date() });
 
       upsertDashboardRow_(batchKey, 'Late results: ' + evName + ' ' + dateStr, new Date());
       refreshDashboardStats_(batchKey);
+      centralAudit_('send', 'tracking', 'Tracking', batchKey, 'Late results reminder #' + n + ' (' + evName + ')', '', 'Sent to ' + to, 'Success');
       sent++;
     });
 
@@ -150,13 +151,6 @@ getProp_
 }
 
 // ---------- HELPERS ----------
-
-function centralAudit_(action, domain, sheet, id, detail, before, after, ok) {
-  try {
-    const sh = SpreadsheetApp.openById( ).getSheetByName('AuditLog');
-    sh.appendRow([id, new Date().toISOString(), 'SMMC Auto Bot', action, domain, sheet, detail, before, after, ok || 'Success']);
-  } catch (e) { console.error('Central audit failed:', e.message); }
-}
 
 const lrN_ = s => String(s === null || s === undefined ? '' : s).replace(/\s+/g, ' ').trim().toLowerCase();
 const lrDay_ = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());

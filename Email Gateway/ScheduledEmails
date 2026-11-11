@@ -98,43 +98,14 @@ function createScheduledTrigger_(payload) {
     return { success: false, error: "scheduledAt must be a valid future date/time." };
   }
 
-  // Store draft row so runScheduledEmails_ can retrieve it
-  const draftSheet = getDraftSheet();
-  const existing   = sheetToObjects_(draftSheet).find(r => r["Draft ID"] === draftId);
-
-  const draftRow = [
-    draftId,
-    key           || "",
-    subject       || "",
-    to            || "",
-    cc            || "",
-    bcc           || "",
-    // Store recipients + resolved bodies as JSON in the Body column
-    JSON.stringify({ html: body, recipients: recipients || [] }),
-    templateId    || "",
-    "",           // Signature ID (already embedded in body)
-    scheduledAt,
-    new Date().toISOString(),
-    "Scheduled"
-  ];
-
-  if (existing) {
-    draftSheet.getRange(existing._rowIndex, 1, 1, draftRow.length).setValues([draftRow]);
-  } else {
-    draftSheet.appendRow(draftRow);
-  }
-
-  // Create a one-off time-based trigger
-  // Store the draftId in the trigger's unique ID via PropertiesService so
-  // runScheduledEmails_ knows which draft to process.
-  const trigger = ScriptApp.newTrigger("runScheduledEmails")
-    .timeBased()
-    .at(fireAt)
-    .create();
-
-  // Map triggerId → draftId so we can look up the right draft when it fires
-  const props = PropertiesService.getScriptProperties();
-  props.setProperty("trigger_" + trigger.getUniqueId(), draftId);
+  const trigger = ScriptApp.newTrigger("runScheduledEmails").timeBased().at(fireAt).create();
+  try {
+    dataGw_("append", "Drafts", { rowData: {
+      "Draft ID": draftId, "Key": key || "", "Subject": subject || "", "To": to || "", "CC": cc || "", "BCC": bcc || "",
+      "Body": JSON.stringify({ html: body, recipients: recipients || [] }), "Template ID": templateId || "",
+      "Signature ID": "", "Scheduled": fireAt.toISOString(), "Saved At": new Date().toISOString(), "Status": "Scheduled" } });
+  } catch (e) { ScriptApp.deleteTrigger(trigger); throw e; }
+  PropertiesService.getScriptProperties().setProperty("trigger_" + trigger.getUniqueId(), draftId);
 
   return {
     success:    true,
@@ -178,14 +149,13 @@ function runScheduledEmails(e) {
 
   targets.forEach(draft => {
     try {
-      sendDraft_(draft, draftSheet);
+      sendDraft_(draft);
     } catch (err) {
       Logger.log("runScheduledEmails: error sending draft %s — %s", draft["Draft ID"], err.message);
       // Mark draft as Failed so it's visible in the sheet
-      if (draft._rowIndex) {
-        draftSheet.getRange(draft._rowIndex, DRAFT_HEADERS.indexOf("Status") + 1)
-          .setValue("Failed: " + err.message);
-      }
+      try { 
+        dataGw_("update", "Drafts", { hexKey: draft["Draft ID"], update: { Status: "Failed: " + err.message }}); 
+      } catch (e) {}
     }
   });
 
@@ -193,69 +163,22 @@ function runScheduledEmails(e) {
 }
 
 // ── 3. sendDraft_ ───────────────────────────────────────────────
-function sendDraft_(draft, draftSheet) {
-  const draftId  = draft["Draft ID"];
-  const subject  = draft["Subject"];
-  const cc       = draft["CC"]  || "";
-  const bcc      = draft["BCC"] || "";
-  const key      = draft["Key"] || draftId;
-  const sentAt   = new Date();
-
-  // Parse recipients + resolved bodies from Body column
-  let parsed, recipients;
-  try {
-    parsed     = JSON.parse(draft["Body"]);
-    recipients = parsed.recipients || [];
-  } catch (_) {
-    // Fallback: plain body, send to To field as-is
-    parsed     = { html: draft["Body"], recipients: [] };
-    recipients = (draft["To"] || "").split(",").map(e => ({ email: e.trim(), resolvedBody: draft["Body"] }));
-  }
-
-  if (!recipients.length && draft["To"]) {
-    recipients = draft["To"].split(",").map(e => ({ email: e.trim(), resolvedBody: parsed.html || "" }));
-  }
-
-  const batchKey = draftId; // reuse draftId as batchKey for consistency
-
-  // Send one email per recipient with their personalised body
-  recipients.forEach(r => {
-    if (!r.email) return;
-    const opts = { htmlBody: r.resolvedBody || parsed.html || "" };
-    if (cc)  opts.cc  = cc;
-    if (bcc) opts.bcc = bcc;
-    GmailApp.sendEmail(r.email, subject, "", opts);
-
-    // Record in Tracking sheet
-    recordEmailSend({
-      batchKey:      batchKey + "-" + r.email,
-      key:           key,
-      contactName:   r.name || r.email,
-      contactRole:   "",
-      club:          "",
-      recipientEmail:r.email
-    });
+function sendDraft_(draft) {
+  const draftId = draft["Draft ID"], subject = draft["Subject"];
+  let parsed; try { parsed = JSON.parse(draft["Body"]); } catch (_) { parsed = { html: draft["Body"], recipients: [] }; }
+  const recipients = (parsed.recipients && parsed.recipients.length) ? parsed.recipients
+    : String(draft["To"] || "").split(",").map(e => ({ email: e.trim(), name: e.trim(), resolvedBody: parsed.html || "" })).filter(r => r.email);
+  const results = deliver_({ batchKey: draftId, subject, cc: draft["CC"], bcc: draft["BCC"], recipients });
+  const iso = new Date().toISOString();
+  results.forEach(x => {
+    try { dataGw_("update", "Tracking", { hexKey: x.key, update: { "Email Status": x.ok ? "Sent" : "Failed", "Date Sent": iso, "Thread ID": x.threadId || "", "Comments": x.ok ? "" : x.error } }); }
+    catch (e) { Logger.log("Tracking update failed for %s: %s", x.key, e.message); }
   });
-
-  // Record in Sent sheet
-  const sentSheet = getSentSheet();
-  sentSheet.appendRow([
-    batchKey,
-    key,
-    subject,
-    draft["To"],
-    cc,
-    draft["Scheduled"],
-    sentAt.toISOString(),
-    parsed.html || "",
-    draft["Template ID"] || "",
-    recipients.length
-  ]);
-
-  // Delete the draft row
-  draftSheet.deleteRow(draft._rowIndex);
-
-  Logger.log("runScheduledEmails: sent '%s' to %s recipient(s)", subject, recipients.length);
+  if (!results.some(x => x.ok)) throw new Error("No emails were sent.");
+  dataGw_("append", "Sent", { rowData: { "Sent ID": draftId, "Key": draft["Key"], "Subject": subject, "To": draft["To"], "CC": draft["CC"],
+    "Scheduled": draft["Scheduled"], "Sent At": iso, "Body": parsed.html || "", "Template ID": draft["Template ID"] || "", "Recipient Count": results.length } });
+  dataGw_("delete", "Drafts", { hexKey: draftId });
+  upsertDashboardRow_(draftId, subject, new Date()); refreshDashboardStats_(draftId);
 }
 
 // ── 4. cancelScheduledTrigger_ ─────────────────────────────────
@@ -285,10 +208,11 @@ function cancelScheduledTrigger_(draftId) {
   });
 
   // Remove draft row
-  const draftSheet = getDraftSheet();
-  const drafts     = sheetToObjects_(draftSheet);
-  const row        = drafts.find(r => r["Draft ID"] === draftId);
-  if (row) draftSheet.deleteRow(row._rowIndex);
+  const row = sheetToObjects_(getDraftSheet()).find(r => r["Draft ID"] === draftId);
+  if (row) {
+    try { JSON.parse(row["Body"]).recipients.forEach(r => { if (r.key) dataGw_("update", "Tracking", { hexKey: r.key, update: { "Email Status": "Cancelled" } }); }); } catch (e) {}
+    dataGw_("delete", "Drafts", { hexKey: draftId });
+  }
 
   return { success: true, triggerDeleted };
 }
@@ -300,4 +224,26 @@ function cleanupTrigger_(triggerId, props) {
     if (t.getUniqueId() === triggerId) ScriptApp.deleteTrigger(t);
   });
   if (props) props.deleteProperty("trigger_" + triggerId);
+}
+
+function sendNow_(p) {
+  const { subject, to, cc, bcc, body, key, recipients } = p;
+  if (!subject || (!to && !(recipients || []).length)) return { success: false, error: "subject and recipient required." };
+
+  const list = (recipients && recipients.length)
+    ? recipients
+    : String(to).split(",").map(e => ({ email: e.trim(), resolvedBody: body }));
+  const batchKey = key || generateTrackingKey();
+
+  list.forEach(r => {
+    if (!r.email) return;
+    const opts = { htmlBody: r.resolvedBody || body || "" };
+    if (cc)  opts.cc  = cc;
+    if (bcc) opts.bcc = bcc;
+    GmailApp.sendEmail(r.email, subject, "", opts);
+    recordEmailSend({ batchKey: batchKey + "-" + r.email, key: batchKey, contactName: r.name || r.email,
+                      contactRole: "", club: "", recipientEmail: r.email });
+    centralAudit_('send', 'tracking', 'Tracking', batchKey, subject, '', 'Sent to ' + to, 'Success');
+  });
+  return { success: true, sent: list.length };
 }
