@@ -68,7 +68,7 @@ function lrRun_(dry) {
       .map(role => { const c = committee.find(x => lrN_(x.Role) === lrN_(role)); return c ? String(c.Email || '').trim() : ''; })
       .filter(Boolean);
 
-    const track = getSheet_(TRACKING_SHEET);
+    const track = getTrackingSheet();
     const hist = {};   // batchKey -> [{rowNum, status, sent}]
     track.getDataRange().getValues().slice(1).forEach((r, i) => {
       const b = String(r[TC.BATCH_KEY - 1]);
@@ -87,14 +87,14 @@ function lrRun_(dry) {
       if (String(ev['Results']).trim() !== 'Not Started') return;
       const orig = lrDate_(ev['Date']);
       if (!orig) return;
-      const evDate = lrDate_(ev['Rescheduled Date']) || orig;   // "Pending ..." values are ignored
+      const evDate = lrDate_(ev['Rescheduled Date']) || orig;   
       if (from && evDate < from) return;
       const overdue = Math.round((today - evDate) / 864e5);
       if (overdue < LR.AFTER_DAYS) return;
 
       const cls = classes.find(c => lrN_(c.ClassName) === lrN_(ev['Class']));
       const coord = cls ? String(cls.Coordinator || '').trim() : '';
-      if (!coord) return;                                        // e.g. Social has no coordinator
+      if (!coord) return;                                        
 
       const dateStr = Utilities.formatDate(evDate, tz, 'EEE d MMM yyyy');
       const evName = [ev['Class'], ev['Regatta Type'], ev['Round no'] ? 'Rd ' + ev['Round no'] : ''].filter(Boolean).join(' ');
@@ -113,11 +113,11 @@ function lrRun_(dry) {
 
       const n = prior.length + 1;
       const key = batchKey + '-R' + n + '-' + Utilities.getUuid().substring(0, 8);
-      const link = lrLink_(ev['HexKey']);                        // NEW: deep link to this event's row
+      const link = lrLink_(ev['HexKey']);                        
       const vars = { coordinator: coord, class: ev['Class'], event: evName, eventDate: dateStr,
                      daysOverdue: overdue, reminderNo: n,
-                     link: link,                                                       // raw URL
-                     eventLink: '<a href="' + link + '">' + evName + ' – ' + dateStr + '</a>' };   // ready-made anchor
+                     link: link,                                                       
+                     eventLink: '<a href="' + link + '">' + evName + ' – ' + dateStr + '</a>' };   
       const subject = lrFill_((tpl.prefix + ' ' + tpl.subject).trim(), vars);
       const pixel = webAppUrl
         ? '<img src="' + webAppUrl + '?key=' + encodeURIComponent(key) + '&t=' + Date.now() + '" width="1" height="1" style="display:none" alt="">'
@@ -130,17 +130,27 @@ function lrRun_(dry) {
 
       const x = deliver_({ batchKey, subject, cc, bcc: tpl.bcc.trim(), recipients: [{ email: to, name: coord, key, resolvedBody: html }] })[0];
       if (!x.ok) { Logger.log('SEND FAILED %s -> %s: %s', evName, to, x.error); return; }
-      dataGw_('append', 'Tracking', { rowData: {
-        'Batch Key': batchKey, 'Club': 'SMMC', 'Contact Name': coord, 'Contact Role': 'Class Coordinator', 'Email Status': 'Sent',
-        'Key': key, 'Date Sent': new Date().toISOString(), 'Reminder Sent': 'No',
-        'Comments': 'Late results reminder #' + n + ' - ' + evName + ' ' + dateStr,
-        'Thread ID': x.threadId || '', 'Recipient Email': to, 'Open Count': 0 } });
-      prior.forEach(h => dataGw_('update', 'Tracking', { hexKey: h.key, update: { 'Reminder Sent': 'Yes' } }));
+      
+      // Architectural Fix: Append to Tracking directly using local sheet logic
+      track.appendRow([
+        batchKey, 'SMMC', coord, 'Class Coordinator', 'Sent', key, 
+        new Date(), '', '', '', '', 'No', 
+        'Late results reminder #' + n + ' - ' + evName + ' ' + dateStr, 
+        x.threadId || '', to, '', 0
+      ]);
+      
+      // Architectural Fix: Use local Code.js function directly 
+      prior.forEach(h => markReminderSent(h.key));
+      
       (hist[batchKey] = hist[batchKey] || []).push({ key, status: 'Sent', sent: new Date() });
 
       upsertDashboardRow_(batchKey, 'Late results: ' + evName + ' ' + dateStr, new Date());
       refreshDashboardStats_(batchKey);
-      centralAudit_('send', 'tracking', 'Tracking', batchKey, 'Late results reminder #' + n + ' (' + evName + ')', '', 'Sent to ' + to, 'Success');
+      
+      // Fixed undefined call
+      if (typeof appendAuditLog_ === 'function') {
+        appendAuditLog_(batchKey, 'ALL', 'Tracking', 'Late results reminder #' + n + ' (' + evName + ')', '', 'Sent to ' + to);
+      }
       sent++;
     });
 

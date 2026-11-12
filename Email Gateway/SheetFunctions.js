@@ -26,12 +26,30 @@
  */
 
 // ---------- CONFIG ----------
-
-const TRACKING_SHEET = 'Tracking';
 const DASHBOARD_SHEET = 'Dashboard';
 const AUDIT_SHEET = 'Audit_Log';
 const CONTACTS_SHEET_NAME = 'Contacts';
+const TRACKING_SHEET = "Tracking"; // Standardized sheet name
 const RESERVED_SHEETS = [TRACKING_SHEET, DASHBOARD_SHEET, AUDIT_SHEET];
+const EMAIL_TRACKING_HEADERS = [
+  "Batch Key",
+  "Club",
+  "Contact Name",
+  "Contact Role",
+  "Email Status",
+  "Key",
+  "Date Sent",
+  "Date Updated",
+  "Response Days",
+  "Response Time",
+  "Email Response",
+  "Reminder Sent",
+  "Comments",
+  "Thread ID",
+  "Recipient Email",
+  "Date Opened",
+  "Open Count"
+];
 
 // Tracking column numbers (1-indexed)
 const TC = {

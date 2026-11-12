@@ -1,30 +1,102 @@
-const EMAIL_TRACKING_HEADERS = [
-  "Batch Key",
-  "Club",
-  "Contact Name",
-  "Contact Role",
-  "Email Status",
-  "Key",
-  "Date Sent",
-  "Date Updated",
-  "Response Days",
-  "Response Time",
-  "Email Response",
-  "Reminder Sent",
-  "Comments",
-  "Thread ID",
-  "Recipient Email",
-  "Date Opened",
-  "Open Count"
-];
+// WebApp ===========================================================
+
+function doGet(e) {
+  const params = e && e.parameter ? e.parameter : {};
+  const action = params.action || "list";
+  
+  // ---------- OPEN-TRACKING PIXEL (WEB APP) ----------
+  const key = e && e.parameter && e.parameter.key;
+  if (key) { 
+    try { 
+      recordOpen_(key); 
+      } catch (err) { /* always return the pixel */ } 
+    return Utilities.newBlob(
+      Utilities.base64Decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7'),
+      'image/gif', 'pixel.gif'
+    );
+  }
+
+  try {
+    switch (action) {
+      case "list":
+        return json({ success: true, records: listTrackingRecords() });
+      case "find":
+        return json({ success: true, records: findTrackingRecords(params.key || params.id || "") });
+      default:
+        return json({ success: false, error: `Unknown action: ${action}` });
+    }
+  } catch (err) {
+    return json({ success: false, error: err.message || String(err) });
+  }
+}
+
+function doPost(e) {
+  const raw = e && e.postData && e.postData.contents ? e.postData.contents : "{}";
+  try {
+    const payload = JSON.parse(raw);
+    const action  = payload.action || "recordSend";
+    const PUBLIC  = ["markOpened"]; // open-tracker stays public
+    const WRITERS = ["editor", "coord", "admin"];
+
+    // Validate token access for non-public actions
+    const tok = verifyToken ? verifyToken(payload.token) : null;
+    if (action !== "markOpened" && !tok) {
+      return json({ success: false, code: "AUTH", error: "Unauthorized" });
+    }
+
+    if (!PUBLIC.includes(action) && typeof verifyToken === "function") {
+      if (tok.mc) return json({ success: false, code: "AUTH", error: "Password change required" });
+      const readOnly = ["list", "find"].includes(action);
+      if (!readOnly && !WRITERS.includes(tok.role)) {
+        return json({ success: false, code: "FORBIDDEN", error: "Forbidden" });
+      }
+    }
+
+    switch (action) {
+      case "fetchEmail":       
+        return json({ success: true, values: typeof fetchEmail_ === "function" ? fetchEmail_(payload.sheet, tok) : [] });
+      case "sendNow":          
+        return json(typeof sendNow_ === "function" ? sendNow_(payload, tok) : { success: false, error: "sendNow_ not implemented" });
+      case "refreshDashboard": 
+        return json(typeof refreshDashboard_ === "function" ? refreshDashboard_(payload, tok) : { success: false });
+
+      case "list":
+        return json({ success: true, records: listTrackingRecords() });
+      case "find":
+        return json({ success: true, records: findTrackingRecords(payload.key || payload.id || "") });
+      case "recordSend":
+        return json({ success: true, batchKey: recordEmailSend(payload) });
+      case "markUpdated":
+        return json({ success: markEmailUpdated(payload.key, payload.status, payload.comments) });
+      case "markOpened":
+        return json({ success: markEmailOpened(payload.key, payload.openedAt) });
+      case "markReminderSent":
+        return json({ success: markReminderSent(payload.key) });
+      case "createScheduledTrigger":
+        if (typeof needEditor_ === "function") needEditor_(tok);
+        return json(typeof createScheduledTrigger_ === "function" ? createScheduledTrigger_(payload) : { success: false });
+      case "cancelScheduledTrigger":
+        if (typeof needEditor_ === "function") needEditor_(tok);
+        return json(typeof cancelScheduledTrigger_ === "function" ? cancelScheduledTrigger_(payload.draftId) : { success: false });
+      default:
+        return json({ success: false, error: `Unknown action: ${action}` });
+    }
+  } catch (err) {
+    return json({ success: false, error: err.message || String(err) });
+  }
+}
+
+function json(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
 
 function getTrackingSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetName = "Tracking";
-  let sheet = ss.getSheetByName(sheetName);
+  let sheet = ss.getSheetByName(TRACKING_SHEET);
 
   if (!sheet) {
-    sheet = ss.insertSheet(sheetName);
+    sheet = ss.insertSheet(TRACKING_SHEET);
     sheet.getRange(1, 1, 1, EMAIL_TRACKING_HEADERS.length).setValues([EMAIL_TRACKING_HEADERS]);
     sheet.setFrozenRows(1);
   }
@@ -41,10 +113,13 @@ function generateTrackingKey() {
 }
 
 function markTracking_(batchKeyEmail, status, threadId) {
-  const sh = getOrCreateSheet_(TRACKING_SHEET, EMAIL_TRACKING_HEADERS);
-  const v = sh.getDataRange().getValues(), h = v[0].map(String), c = n => h.indexOf(n) + 1;
+  const sh = getTrackingSheet();
+  const v = sh.getDataRange().getValues();
+  const h = v[0].map(String);
+  const c = n => h.indexOf(n) + 1;
+  
   for (let i = 1; i < v.length; i++) {
-    if (String(v[i][0]) === batchKeyEmail) {
+    if (String(v[i][0]) === batchKeyEmail || String(v[i][5]) === batchKeyEmail) {
       sh.getRange(i + 1, c("Email Status")).setValue(status);
       if (status === "Sent") sh.getRange(i + 1, c("Date Sent")).setValue(new Date());
       if (threadId) sh.getRange(i + 1, c("Thread ID")).setValue(threadId);
@@ -88,10 +163,10 @@ function markEmailUpdated(key, status, comments) {
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][5]).trim() === String(key).trim() || String(rows[i][0]).trim() === String(key).trim()) {
       const updatedAt = new Date();
-      sheet.getRange(i + 1, 6).setValue(status || "Updated");
-      sheet.getRange(i + 1, 8).setValue(updatedAt);
+      sheet.getRange(i + 1, 5).setValue(status || "Updated"); // Column E: Email Status
+      sheet.getRange(i + 1, 8).setValue(updatedAt);          // Column H: Date Updated
       if (comments) {
-        sheet.getRange(i + 1, 13).setValue(comments);
+        sheet.getRange(i + 1, 13).setValue(comments);         // Column M: Comments
       }
       return true;
     }
@@ -106,9 +181,9 @@ function markEmailOpened(key, openedAt) {
 
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][5]).trim() === String(key).trim() || String(rows[i][0]).trim() === String(key).trim()) {
-      sheet.getRange(i + 1, 16).setValue(openedAt || new Date());
+      sheet.getRange(i + 1, 16).setValue(openedAt || new Date()); // Column P: Date Opened
       const openCount = Number(rows[i][16]) || 0;
-      sheet.getRange(i + 1, 17).setValue(openCount + 1);
+      sheet.getRange(i + 1, 17).setValue(openCount + 1);          // Column Q: Open Count
       return true;
     }
   }
@@ -122,7 +197,7 @@ function markReminderSent(key) {
 
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][5]).trim() === String(key).trim() || String(rows[i][0]).trim() === String(key).trim()) {
-      sheet.getRange(i + 1, 12).setValue("Yes");
+      sheet.getRange(i + 1, 12).setValue("Yes"); // Column L: Reminder Sent
       return true;
     }
   }
@@ -145,65 +220,6 @@ function listTrackingRecords() {
       });
       return record;
     });
-}
-
-function doPost(e) {
-  const raw = e && e.postData && e.postData.contents ? e.postData.contents : "{}";
-  try {
-    const payload = JSON.parse(raw);
-    const action  = payload.action || "recordSend";
-    const PUBLIC  = ["markOpened"];                       // open-tracker stays public
-    const WRITERS = ["editor", "coord", "admin"];
-
-    const tok = verifyToken(payload.token);
-    if (action !== "markOpened" && !tok)
-         return json({ success: false, code: "AUTH", error: "Unauthorized" });
-
-    if (!PUBLIC.includes(action)) {
-      const p = verifyToken(payload.token);
-      if (!p) return json({ success: false, code: "AUTH", error: "Unauthorized" });
-      if (p.mc) return json({ success: false, code: "AUTH", error: "Password change required" });
-      const readOnly = ["list", "find"].includes(action);
-      if (!readOnly && !WRITERS.includes(p.role))
-        return json({ success: false, code: "FORBIDDEN", error: "Forbidden" });
-    }
-
-    switch (action) {
-      case "fetchEmail":       return json({ success: true, values: fetchEmail_(payload.sheet, tok) });
-      case "sendNow":          return json(sendNow_(payload, tok));
-      case "refreshDashboard": return json(refreshDashboard_(payload, tok));
-
-      case "list":
-        return json({ success: true, records: listTrackingRecords() });
-      case "find":
-        return json({ success: true, records: findTrackingRecords(payload.key || payload.id || "") });
-      case "recordSend":
-        return json({ success: true, batchKey: recordEmailSend(payload) });
-      case "markUpdated":
-        return json({ success: markEmailUpdated(payload.key, payload.status, payload.comments) });
-      case "markOpened":
-        return json({ success: markEmailOpened(payload.key, payload.openedAt) });
-      case "markReminderSent":
-        return json({ success: markReminderSent(payload.key) });
-      case "createScheduledTrigger":
-        needEditor_(tok);
-        return json(createScheduledTrigger_(payload));
-      case "cancelScheduledTrigger":
-        needEditor_(tok);
-        return json(cancelScheduledTrigger_(payload.draftId));
-      case "sendNow":
-        return json(sendNow_(payload));
-      default:
-        return json({ success: false, error: `Unknown action: ${action}` });
-    }
-  } catch (err) {
-    return json({ success: false, error: err.message || String(err) });
-  }
-}
-
-function json(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function findTrackingRecords(searchKey) {
@@ -229,3 +245,4 @@ function findTrackingRecords(searchKey) {
     })
     .map(({ record }) => record);
 }
+
