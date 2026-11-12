@@ -525,17 +525,6 @@ function disableAutoCheckTrigger() {
   });
 }
 
-// ---------- OPEN-TRACKING PIXEL (WEB APP) ----------
-
-function doGet(e) {
-  const key = e && e.parameter && e.parameter.key;
-  if (key) { try { recordOpen_(key); } catch (err) { /* always return the pixel */ } }
-  return Utilities.newBlob(
-    Utilities.base64Decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7'),
-    'image/gif', 'pixel.gif'
-  );
-}
-
 function recordOpen_(key) {
   const sh = getSheet_(TRACKING_SHEET);
   const data = sh.getDataRange().getValues();
