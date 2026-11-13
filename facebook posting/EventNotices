@@ -1,0 +1,306 @@
+/* EventNotices.js
+ * Logic for scanning the Annual Calendar on Wednesdays, generating DRAFT notices,
+ * auto-approving them on Thursday 08:00, and compositing image graphics.
+ */
+
+// 1. WEDNESDAY 08:00 TRIGGER: Generate DRAFT Notices for Upcoming Weekend
+function createWednesdayEventNotices() {
+  const cfg = getConfig();
+  const queueSs = SpreadsheetApp.openById(cfg.fbPostingSheetID);
+  const queueSheet = queueSs.getSheetByName("Queue");
+  
+  // Access Calendar Event Data sheet
+  const calSheet = getCalendarEventDataSheet_();
+  if (!calSheet) throw new Error("Could not locate Calendar 'Event Data' sheet.");
+
+  const calRows = calSheet.getDataRange().getValues();
+  const calHeaders = calRows[0].map(h => String(h).trim().toLowerCase());
+  
+  const colDate = calHeaders.indexOf("date");
+  const colType = calHeaders.indexOf("event type");
+  const colClass = calHeaders.indexOf("class");
+  const colRegatta = calHeaders.indexOf("regatta type");
+  const colEventName = calHeaders.indexOf("event");
+  const colStart = calHeaders.indexOf("start");
+  const colFinish = calHeaders.indexOf("finish");
+  const colHex = calHeaders.indexOf("hexkey");
+  const colResults = calHeaders.indexOf("results");
+
+  // Determine target upcoming Saturday and Sunday
+  const today = new Date();
+  const targetDates = getUpcomingWeekendDates_(today);
+
+  // Read existing queue to prevent duplicates
+  const queueData = queueSheet.getDataRange().getValues();
+  const existingKeys = new Set();
+  for (let i = 1; i < queueData.length; i++) {
+    const key = queueData[i][2]; // CalendarHexKey column
+    if (key) existingKeys.add(String(key).trim());
+  }
+
+  for (let r = 1; r < calRows.length; r++) {
+    const row = calRows[r];
+    const eventType = String(row[colType] || "").trim();
+    const results = String(row[colResults] || "").trim();
+    if (eventType !== "Competition" || results === "Cancelled") continue;
+
+    const rowDateStr = formatDateStandard_(row[colDate]);
+    if (!targetDates.includes(rowDateStr)) continue;
+
+    const hexKey = String(row[colHex] || `${rowDateStr}|${row[colStart]}|${row[colClass]}`);
+    if (existingKeys.has(hexKey)) continue; // Already queued
+
+    const className = String(row[colClass] || "").trim();
+    const regattaType = String(row[colRegatta] || "").trim();
+    const eventName = String(row[colEventName] || `${className} ${regattaType}`).trim();
+    const startTime = formatTimeStandard_(row[colStart]);
+    const finishTime = formatTimeStandard_(row[colFinish]);
+
+    // 1. Fetch 3-day weather forecast
+    const weather = fetchWeatherForecast_(rowDateStr);
+
+    // 2. Select default background image
+    const bgImageId = getDefaultBackgroundImageId_(className, cfg.eventBgFolderId);
+
+    // 3. Assemble promotional tagline & caption
+    const tagline = "Spectators & new skippers are always welcome! Come down and see radio-controlled racing up close.";
+    const caption = assembleEventCaption_({
+      eventName: eventName,
+      dateStr: rowDateStr,
+      startTime: startTime,
+      finishTime: finishTime,
+      weather: weather.summary,
+      tagline: tagline
+    });
+
+    // 4. Append to Queue as DRAFT
+    // Columns: Status, PostType, CalendarHexKey, SpreadsheetId, SheetId, SpreadsheetName, SheetName, RegattaName, RaceDate, BackgroundImageId, WeatherSnippet, Tagline, RaceReport, Created, AutoPostDeadline, Started, PostID, Completed, Error
+    queueSheet.appendRow([
+      "DRAFT",               // Status
+      "EVENT_NOTICE",         // PostType
+      hexKey,                // CalendarHexKey
+      "",                    // SpreadsheetId (N/A)
+      "",                    // SheetId (N/A)
+      eventName,             // SpreadsheetName / Event Title
+      className,             // SheetName / Class
+      regattaType || eventName, // RegattaName
+      rowDateStr,            // RaceDate
+      bgImageId,             // BackgroundImageId
+      weather.summary,       // WeatherSnippet
+      tagline,               // Tagline
+      caption,               // RaceReport (Facebook Caption)
+      new Date(),            // Created
+      getThursdayDeadline_(today), // AutoPostDeadline (Thursday 08:00)
+      "",                    // Started
+      "",                    // PostID
+      "",                    // Completed
+      ""                     // Error
+    ]);
+  }
+}
+
+// 2. THURSDAY 08:00 TRIGGER: Auto-Approve Remaining DRAFT Notices
+function autoApproveEventNotices() {
+  const cfg = getConfig();
+  const queueSs = SpreadsheetApp.openById(cfg.fbPostingSheetID);
+  const queueSheet = queueSs.getSheetByName("Queue");
+  const rows = queueSheet.getDataRange().getValues();
+
+  for (let r = 1; r < rows.length; r++) {
+    const status = rows[r][0];
+    const postType = rows[r][1];
+
+    if (status === "DRAFT" && postType === "EVENT_NOTICE") {
+      queueSheet.getRange(r + 1, 1).setValue("PENDING");
+      queueSheet.getRange(r + 1, 15).setValue(new Date()); // Log approval timestamp
+    }
+  }
+}
+
+// 3. GRAPHIC COMPOSITING ENGINE (Overlays text & weather onto background image)
+function renderEventNoticePNG(regattaName, raceDate, weatherSnippet, tagline, bgImageId) {
+  let base64Image = "";
+  if (bgImageId) {
+    try {
+      const file = DriveApp.getFileById(bgImageId);
+      base64Image = Utilities.base64Encode(file.getBlob().getBytes());
+    } catch (e) {
+      console.warn("Could not load background image from Drive:", e);
+    }
+  }
+
+  // Construct SVG Overlay with styling and dark gradient backdrop
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+      <defs>
+        <linearGradient id="grad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#071b2c" stop-opacity="0.65" />
+          <stop offset="45%" stop-color="#0f3550" stop-opacity="0.80" />
+          <stop offset="100%" stop-color="#071b2c" stop-opacity="0.95" />
+        </linearGradient>
+      </defs>
+
+      <!-- Background Image -->
+      ${base64Image ? `<image href="data:image/jpeg;base64,${base64Image}" width="1200" height="630" preserveAspectRatio="xMidYMid slice" />` : `<rect width="1200" height="630" fill="#0c2b42" />`}
+
+      <!-- Shading Overlay for contrast -->
+      <rect width="1200" height="630" fill="url(#grad)" />
+
+      <!-- Top Header Badge -->
+      <rect x="70" y="55" width="230" height="36" rx="18" fill="rgba(94,234,212,0.2)" stroke="#5eead4" stroke-width="1.5" />
+      <text x="185" y="78" fill="#5eead4" font-family="'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="2" text-anchor="middle">UPCOMING REGATTA</text>
+
+      <!-- Event Title -->
+      <text x="70" y="160" fill="#ffffff" font-family="'Helvetica Neue', Arial, sans-serif" font-size="46" font-weight="800">${escapeXml_(regattaName)}</text>
+
+      <!-- Date & Location -->
+      <text x="70" y="215" fill="#5eead4" font-family="'Helvetica Neue', Arial, sans-serif" font-size="24" font-weight="600">📅 ${escapeXml_(raceDate)}</text>
+      <text x="70" y="255" fill="#eaf6f6" font-family="'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="500">📍 ${escapeXml_(CLUB_INFO.venue)}</text>
+
+      <!-- Weather Box -->
+      <rect x="70" y="305" width="1060" height="120" rx="16" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.2)" />
+      <text x="100" y="345" fill="#ffb347" font-family="'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="1">CONDITIONS &amp; OUTLOOK</text>
+      <text x="100" y="385" fill="#ffffff" font-family="'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="500">${escapeXml_(weatherSnippet || "Check club notice board on race morning.")}</text>
+
+      <!-- Tagline & Footer -->
+      <text x="70" y="490" fill="#eaf6f6" font-family="'Helvetica Neue', Arial, sans-serif" font-size="20" font-style="italic">"${escapeXml_(tagline || "Visitors and spectators welcome!")}"</text>
+
+      <!-- Club Footer Branding -->
+      <line x1="70" y1="535" x2="1130" y2="535" stroke="rgba(255,255,255,0.2)" stroke-width="1" />
+      <text x="70" y="575" fill="#5eead4" font-family="'Helvetica Neue', Arial, sans-serif" font-size="18" font-weight="700">${escapeXml_(CLUB_INFO.name)}</text>
+      <text x="1130" y="575" fill="#a0b8c8" font-family="'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="500" text-anchor="end">${escapeXml_(CLUB_INFO.website)}</text>
+    </svg>
+  `;
+
+  // Convert SVG string to PNG Blob
+  return Utilities.newBlob(svg, "image/svg+xml", "notice.svg").getAs("image/png");
+}
+
+// 4. API Endpoints for mediaManagement.html Modal
+function listAvailableBackgroundImages() {
+  const cfg = getConfig();
+  if (!cfg.eventBgFolderId) return [];
+  const folder = DriveApp.getFolderById(cfg.eventBgFolderId);
+  const files = folder.getFiles();
+  const list = [];
+  while (files.hasNext()) {
+    const f = files.next();
+    const mime = f.getMimeType();
+    if (mime.includes("image/")) {
+      list.push({ id: f.getId(), name: f.getName() });
+    }
+  }
+  return list;
+}
+
+// --- Internal Helpers ---
+function assembleEventCaption_(opts) {
+  return `⛵ UPCOMING EVENT NOTICE — ${CLUB_INFO.name}
+
+🏆 ${opts.eventName}
+📅 Date: ${opts.dateStr}
+⏰ Time: ${opts.startTime} – ${opts.finishTime}
+📍 Venue: ${CLUB_INFO.venue}
+
+🌤️ WEATHER & CONDITIONS OUTLOOK:
+${opts.weather}
+
+💬 ${opts.tagline}
+
+--------------------------------------------
+🔗 Club Links & Info:
+🌐 Website: ${CLUB_INFO.website}
+📘 Facebook: ${CLUB_INFO.facebook}
+💬 WhatsApp: ${CLUB_INFO.whatsApp}
+📧 Contact: ${CLUB_INFO.email}
+
+#SMMC #RadioSailing #ModelYachts #SydneySailing`;
+}
+
+function fetchWeatherForecast_(targetDateStr) {
+  const cfg = getConfig();
+  if (cfg.weatherApiUrl) {
+    try {
+      const res = UrlFetchApp.fetch(`${cfg.weatherApiUrl}?date=${encodeURIComponent(targetDateStr)}`, { muteHttpExceptions: true });
+      const data = JSON.parse(res.getContentText());
+      if (data && data.summary) return data;
+    } catch (e) {
+      console.warn("Weather API fetch error:", e);
+    }
+  }
+  return { summary: "Forecast: Light to moderate breeze. Full morning update on club channel." };
+}
+
+function getDefaultBackgroundImageId_(className, folderId) {
+  if (!folderId) return "";
+  try {
+    const folder = DriveApp.getFolderById(folderId);
+    const files = folder.getFiles();
+    let fallbackId = "";
+    while (files.hasNext()) {
+      const f = files.next();
+      const n = f.getName().toLowerCase();
+      if (className && n.includes(className.toLowerCase())) return f.getId();
+      if (n.includes("default") || n.includes("generic")) fallbackId = f.getId();
+    }
+    return fallbackId;
+  } catch (e) {
+    return "";
+  }
+}
+
+function getUpcomingWeekendDates_(fromDate) {
+  const dates = [];
+  const curr = new Date(fromDate);
+  for (let i = 1; i <= 7; i++) {
+    const next = new Date(curr.getTime() + i * 86400000);
+    const day = next.getDay();
+    if (day === 6 || day === 0) { // Sat or Sun
+      dates.push(formatDateStandard_(next));
+    }
+  }
+  return dates;
+}
+
+function getThursdayDeadline_(fromDate) {
+  const d = new Date(fromDate);
+  // Find Thursday (day 4)
+  const diff = (4 - d.getDay() + 7) % 7;
+  const thurs = new Date(d.getTime() + diff * 86400000);
+  thurs.setHours(8, 0, 0, 0);
+  return thurs;
+}
+
+function formatDateStandard_(d) {
+  const dt = (d instanceof Date) ? d : new Date(d);
+  if (isNaN(dt.getTime())) return String(d);
+  const dd = String(dt.getDate()).padStart(2, '0');
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const yyyy = dt.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function formatTimeStandard_(t) {
+  if (!t) return "11:00 AM";
+  const s = String(t).trim();
+  if (/^\d{1,2}:\d{2}/.test(s)) return s;
+  return s;
+}
+
+function escapeXml_(str) {
+  return String(str || "").replace(/[<>&'"]/g, c => {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '\'': return '&apos;';
+      case '"': return '&quot;';
+    }
+  });
+}
+
+function getCalendarEventDataSheet_() {
+  // Finds the active or configured calendar spreadsheet
+  const ss = SpreadsheetApp.getActive();
+  return ss.getSheetByName("Event Data");
+}
