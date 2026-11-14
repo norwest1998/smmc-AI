@@ -10,15 +10,22 @@ const FOLDERS = {
 };
 
 function doGet(e) {
+console.log("in doGet" + e.parameter)
     const action   = e.parameter.action;
     const folderKey = e.parameter.folder;   // "upload" | "processed" | "overall"
     const fileId   = e.parameter.fileId;
-
+console.log("get GW",e.parameter.folder, e.parameter.name, e.parameter.data, e.parameter.mimeType);
     try {
         switch (action) {
             case "listFolder": return listFolder(folderKey);
             case "readFile":   return readFile(fileId);
             case 'listErrorFiles':   return efListErrorFiles_();
+            case "updateFile": return updateFile(fileId, e.parameter.data);
+            case "uploadNew":  return uploadNew(e.parameter.folder, e.parameter.name, e.parameter.data, e.parameter.mimeType);
+            case "fileMeta":      return fileMeta(e.parameter.fileId);
+            case "archiveFile":   return archiveFile(e.parameter.fileId);
+            case "listRecursive": return listRecursive(e.parameter.folderId);
+            case "listChildren":  return listChildren(e.parameter.folderId);
             default:           return respond({ error: "Unknown action: " + action });
         }
     } catch(err) {
@@ -27,18 +34,19 @@ function doGet(e) {
 }
 
 function doPost(e) {
-    if (!verifyToken(e.parameter.token)) return respond({ success: false, code: "AUTH", error: "Unauthorized" });
-    
+console.log("in doPost" + e.postData.contents);
     try {
         const body = JSON.parse((e && e.postData && e.postData.contents) || "{}");
         const claims = body.action ? verifyToken(body.token) : null;
         if (body.action && !claims)
             return respond({ success: false, code: "AUTH", error: "Unauthorized" });
-
+console.log("post GW",body.folder, body.name, body.data, body.mimeType); 
         // error-file editor actions (fileGatewayErrors_v4.js)
         const handled = errorFileAction_v4(body.action, body, claims);
         if (handled !== undefined) return respond(handled);
-        
+
+       
+
         switch (body.action) {
             case "listFolder": return listFolder(body.folder);
             case "readFile":   return readFile(body.fileId);
@@ -126,6 +134,21 @@ function respond(obj) {
         .setMimeType(ContentService.MimeType.JSON);
 }
 
+function _sig(b) {
+  const secret = PropertiesService.getScriptProperties().getProperty("TOKEN_SECRET");
+  return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(b, secret));
+}
+
+function verifyToken(t) {
+  if (!t || String(t).indexOf(".") < 0) return null;
+  const [b, s] = String(t).split("."), e = _sig(b);
+  let d = s.length ^ e.length;
+  for (let i = 0; i < e.length; i++) d |= (s.charCodeAt(i) || 0) ^ e.charCodeAt(i);
+  if (d) return null;
+  const p = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(b)).getDataAsString());
+  return p.exp > Date.now() ? p : null;
+}
+
 function assertInAllowedFolder_(file) {
   const ok = Object.values(FOLDERS), ps = file.getParents();
   while (ps.hasNext()) if (ok.includes(ps.next().getId())) return;
@@ -141,6 +164,7 @@ function updateFile(fileId, b64) {
 }
 
 function uploadNew(folderKey, name, b64, mimeType) {
+  console.log("Folder: " + folderKey + " " + name);
   const folderId = FOLDERS[folderKey];
   if (!folderId) return respond({ error: "Unknown folder" });
   if (!name || !b64) return respond({ error: "name and data required" });
@@ -203,4 +227,19 @@ function listRecursive(rootId) {
     } while (pageToken);
   })(rootId, "");
   return respond({ files: out });
+}
+
+function _sig(b) {
+  const secret = PropertiesService.getScriptProperties().getProperty("TOKEN_SECRET");
+  return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(b, secret));
+}
+
+function verifyToken(t) {
+  if (!t || String(t).indexOf(".") < 0) return null;
+  const [b, s] = String(t).split("."), e = _sig(b);
+  let d = s.length ^ e.length;
+  for (let i = 0; i < e.length; i++) d |= (s.charCodeAt(i) || 0) ^ e.charCodeAt(i);
+  if (d) return null;
+  const p = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(b)).getDataAsString());
+  return p.exp > Date.now() ? p : null;
 }

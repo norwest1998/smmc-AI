@@ -192,6 +192,8 @@ const REGISTRY = [
       defaultSheet: "AuditLog",
       sheets: {
         AuditLog: {key: "HexCode", headerRow: 1, headers: ["HexCode", "Timestamp", "User", "Action", "Domain", "Sheet", "Detail", "Old Value", "New Value", "Success"]},
+        LoginLog: {key: "LogID", headerRow: 1, headers: ["LogID", "Timestamp", "Email", "Role", "Method", "Status", "Reason", "UserAgent", "SessionID"]},
+        PageViews: {key: "ViewID", headerRow: 1, headers: ["ViewID", "Timestamp", "Email", "Role", "Page", "UserAgent", "SessionID"]},
         SchemaRegistry: {key: "Domain", headerRow: 1,headers: ["Domain","Sheet","Columns","Baseline Columns","Row Count","Last Checked","Status"]},
         VariableRegistry: {key: "Field Name", headerRow: 1,headers: ["Field Name", "Domain / SpreadsheetId", "Sheet", "Key Column", "Source Column", "Tag Notation","Last Refreshed"]}
       }
@@ -203,7 +205,8 @@ const REGISTRY = [
       defaultSheet: "Dashboard",
       sheets: {
         Dashboard: {key: "Key", headerRow: 1,headers: ["Key","Communication Title","Date sent","Requests sent","Responded","Update Responses","Email Responses","% Response","Updates made","Responses with updates","Quickest Response","Average Response","Last Response","Avg Response Days","Emails Opened","% Opened"]},
-        Tracking: {key: "Batch Key", headerRow: 1,headers: ["Batch Key","Club","Contact Name","Contact Role","Email Status","Key","Date Sent","Date Updated","Response Days","Response Time","Email Response","Reminder Sent","Comments","Thread ID","Recipient Email","Date Opened","Open Count"]}
+        Tracking: {key: "Batch Key", headerRow: 1,headers: ["Batch Key","Club","Contact Name","Contact Role","Email Status","Key","Date Sent","Date Updated","Response Days","Response Time","Email Response","Reminder Sent","Comments","Thread ID","Recipient Email","Date Opened","Open Count"]},
+        Drafts: {key: "Draft ID", headerRow: 1, headers: ["Draft ID","Key","Subject","To","CC","BCC","Body","Template ID","Signature ID","Scheduled","Saved At","Status"]}
       }
     }
   },
@@ -332,19 +335,56 @@ function handleAction(action, payload,e) {
         resetPassword(payload.email);
         return json({ success: true });
 
+      case "requestRegister":
+              requestRegister(payload.email, payload.next);
+              return json({ success: true });
+
+      case "validateSetup": {
+        const v = validateSetup(payload.setup);
+        return v ? json({ success: true, ...v }) : json({ error: "This link has expired. Request a new one." });
+      }
+
+      case "completeRegister": {
+        const s = completeRegister(payload.setup, payload.newPassword);
+        return s ? json({ success: true, ...s }) : json({ error: "This link has expired. Request a new one." });
+      }
+
+      case "getSessionPageViews": {
+        const denied = requireAdmin_(payload); if (denied) return denied;
+        return json({ success: true, values: getSessionPageViews_(payload.sessionId, payload.email) });
+      }
+
+      case "trackPageView":
+        return json({ success: true, ...trackPageView_(payload.page, payload.userAgent) });
+
+      case "getLoginLogs": {
+        const denied = requireAdmin_(payload); if (denied) return denied;
+        return json({ success: true, values: getLoginLogs_(payload.limit || 150) });
+      }
+
+      case "getUsageSummary": {
+        const denied = requireAdmin_(payload); if (denied) return denied;
+        return json({ success: true, ...getUsageSummary_() });
+      }
+
+      case "passwordLogin": {
+        const s = passwordLogin(payload.userId, payload.password, { userAgent: payload.userAgent });
+        return s ? json({ success: true, ...s }) : json({ code: "AUTH", error: "Invalid userid or password" });
+      }
+
       case "requestCode":
-        requestLoginCode(payload.email);
+        requestLoginCode(payload.email, { userAgent: payload.userAgent });
         return json({ success: true });
 
       case "verifyCode": {
-        const s = verifyLoginCode(payload.email, payload.code);
+        const s = verifyLoginCode(payload.email, payload.code, { userAgent: payload.userAgent });
         return s ? json({ success: true, ...s }) : json({ code: "AUTH", error: "Invalid or expired code" });
-        }
+      }
 
       case "login": {
-        const s = doLogin(payload.idToken);
+        const s = doLogin(payload.idToken, { userAgent: payload.userAgent });
         return s ? json({ success: true, ...s }) : json({ code: "AUTH", error: "Login failed" });
-        }
+      }
       
       case "previewFacebookImage":
         try {
@@ -453,6 +493,16 @@ function handleAction(action, payload,e) {
       return json({success: true, domain: domain, sheetName: sheetName, layout: getSheetLayout(domain, sheetName)});
     }
 
+    if (action === "svc") {            // server-to-server from the Email Gateway
+      const k = PropertiesService.getScriptProperties().getProperty("INTERNAL_KEY");
+      if (!k || !_eq(payload.key || "", k)) return json({ code: "AUTH", error: "Unauthorized" });
+      const op = payload.op;
+      if (!["append", "update", "delete"].includes(op) || payload.domain !== "tracking" ||
+          !["Tracking", "Sent", "Drafts"].includes(payload.sheet)) return json({ code: "FORBIDDEN", error: "Forbidden" });
+      CURRENT_USER = "SMMC Auto Bot"; CURRENT_ROLE = "editor";
+      return handleAction(op, Object.assign({}, payload, { action: op }), e);
+    }
+
     // --- BELOW LOGIC EXCLUSIVELY FIRES FOR WRITE (UPDATE/DELETE/APPEND) OPERATIONS ---
     // (Bypassed entirely by read-only calls to conserve quota/speed)
     
@@ -505,7 +555,7 @@ function handleAction(action, payload,e) {
           return json({ success: true });
         } 
 
-        let updatedCount = 0;
+        let updatedCount = 0, matched = 0;
         const norm = s => String(s || "").trim().toLowerCase();
 
         Object.entries(updates).forEach(([field, value]) => {
@@ -514,7 +564,7 @@ function handleAction(action, payload,e) {
             console.warn(`Column "${field}" not found in sheet "${sheetName}". Available headers:`, headers);
             return;
           }
-
+          matched++;
           const before = dataRows[dataRowIndex][col];
 
           if (isValueChanged(before, value)) {
@@ -526,7 +576,7 @@ function handleAction(action, payload,e) {
 
         if (updatedCount > 0) {
           clearSheetCache(domain, sheetName);
-        } else if (Object.keys(updates).length > 0) {
+        } else if (Object.keys(updates).length > 0 && matched === 0) {
           return json({ success: false, error: `No matching columns updated for fields: ${Object.keys(updates).join(", ")}` });
         }
         return json({ success: true, updatedCount });
@@ -633,7 +683,8 @@ function auditLog(action, domain, sheetName, recordId, field, before, after, suc
     const sh      = getSheet("audit", "AuditLog");
     const headers = getRegistryHeaders("audit", "AuditLog");
     const u       = CURRENT_USER !== "unknown" && CURRENT_USER !== "public" ? lookupUser(CURRENT_USER) : null;
-    const user    = u ? u.name + " <" + CURRENT_USER + ">" : CURRENT_USER;
+    let user      = u ? u.name + " <" + CURRENT_USER + ">" : CURRENT_USER;
+    if (CURRENT_SID) user += " [" + CURRENT_SID + "]"; // Stamps mutation with Session ID
     const entry   = {
       HexCode:    recordId,
       Timestamp:  new Date().toISOString(),
