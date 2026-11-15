@@ -1,0 +1,124 @@
+/**
+ * validation_v4.js — single source of truth for results-file validation (Race Results web app project).
+ * Used by: the web app 'validate' action (file creation + JSON editor) and main_v4 (hard stop before any write).
+ * Positions / DNS / DNF / RO hold boatIds end to end; `entries` is the only boatId -> sail / member lookup.
+ *
+ * DELETE the old validateResultsFile_v4 from masterData_v4.js (same name, replaced here).
+ */
+
+/** Normalises the file's field names. No translation: positions stay boatIds. Never throws on bad data. */
+function prepareRawData_v4(rawData) {
+  const s = x => String(x == null ? '' : x).trim();
+  const listOf = v => Array.isArray(v) ? v.map(s) : (s(v) === '' ? [] : [s(v)]);
+  return {
+    eventID: s(rawData.eventID),
+    date: rawData.regattaDate,
+    startTime: rawData.startTime,
+    endTime: rawData.endTime,
+    seriesId: s(rawData.seriesId || rawData.series),      // the generator currently sends "series"
+    roundNo: rawData.roundNo,
+    season: s(rawData.season),
+    regattaName: rawData.regattaName,
+    className: rawData.className,
+    formatId: rawData.formatId,
+    competitorCount: rawData.competitorCount,
+    entries: (rawData.entries || []).map(e => ({ ...e, boatId: s(e.boatId), sailNo: s(e.sailNo), member: s(e.member), className: s(e.className) })),
+    raceReport: rawData.raceReport ||
+      `Race results for ${rawData.regattaName} sailed on the ${rawData.regattaDate}`,
+    races: (rawData.races || []).map(r => ({ ...r,
+      positions: listOf(r.positions), dns: listOf(r.dns), dnf: listOf(r.dnf), raceRO: listOf(r.raceRO) }))
+  };
+}
+
+/** Returns { errors: [..], series }. Sets parsed.date (dd/MM/yyyy text) and parsed.dateObj when the date is valid. */
+function collectResultsErrors_v4(parsed, md) {
+  const err = [], s = x => String(x == null ? '' : x).trim(), lc = x => s(x).toLowerCase();
+
+  // --- Series / format ---
+  const series = md.seriesById[lc(parsed.seriesId)];
+  if (!s(parsed.seriesId)) err.push('seriesId missing');
+  else if (!series) err.push('unknown seriesId ' + parsed.seriesId);
+  else if (!series.resolvedFormat) err.push('series has no valid format');
+  else {
+    const bad = new Set(series.resolvedFormat.raceSpecs.map(sp => sp.raceType).filter(t => ['scratch', 'handicap'].indexOf(t) < 0));
+    bad.forEach(t => err.push('unsupported race type: ' + t));
+  }
+
+  // --- Event / round / season / date ---
+  if (!s(parsed.eventID)) err.push('eventID missing');
+  const rn = Number(parsed.roundNo);
+  if (!Number.isInteger(rn) || rn < 1) err.push('roundNo invalid: ' + parsed.roundNo);
+  const season = entriesSeason_v3();
+  if (s(parsed.season) !== season) err.push(`season '${parsed.season}' is not the current season '${season}'`);
+  try { const d = toDate_v4(parsed.date); parsed.dateObj = d; parsed.date = fmtDate_v4(d); } catch (e) { err.push(e.message); }
+
+  // --- Entries ---
+  const entries = parsed.entries || [], byBoat = {};
+  if (!entries.length) err.push('no entries');
+  entries.forEach((e, i) => {
+    const n = `Entry ${i + 1}` + (s(e.member) ? ` (${s(e.member)})` : '');
+    if (!s(e.boatId)) err.push(n + ': boatId is blank');
+    if (!s(e.sailNo)) err.push(n + ': sailNo is blank');
+    if (!s(e.member)) err.push(n + ': member is blank');
+    if (!s(e.className)) err.push(n + ': className is blank');
+    if (s(e.boatId)) {
+      if (byBoat[s(e.boatId)]) err.push(`${n}: boatId ${s(e.boatId)} is duplicated`);
+      byBoat[s(e.boatId)] = e;
+    }
+  });
+
+  // --- Entries vs master data (by boatId) ---
+  if (series) {
+    const roster = {};
+    rosterForSeries_v3(md, series).forEach(b => { roster[s(b.boatId)] = b; });
+    const allowed = series.allowedClasses.map(lc);
+    Object.keys(byBoat).forEach(id => {
+      const e = byBoat[id], b = roster[id], n = `Boat ${id} (${s(e.member)})`;
+      if (!b) { err.push(`${n}: not in the ${series.name} roster`); return; }
+      if (s(b.sailnumber) !== s(e.sailNo)) err.push(`${n}: sail ${s(e.sailNo)} differs from master data (${s(b.sailnumber)})`);
+      if (normalizeName(b.membername) !== normalizeName(e.member)) err.push(`${n}: member differs from master data (${s(b.membername)})`);
+      if (allowed.length && allowed.indexOf(lc(e.className)) < 0) err.push(`${n}: class ${s(e.className)} is not allowed in ${series.name}`);
+    });
+  }
+
+  // --- Races ---
+  const races = parsed.races || [];
+  if (!races.length) err.push('no races');
+  const seen = {}, perRace = [];
+  races.forEach((r, i) => {
+    const n = 'Race ' + (r.raceNumber || i + 1);
+    const pos = r.positions || [], dns = r.dns || [], dnf = r.dnf || [], ro = r.raceRO || [];
+    if (!pos.length) err.push(n + ': no finishers');
+    const all = pos.concat(dns, dnf);
+    all.concat(ro).forEach(id => {
+      if (!id) err.push(n + ': blank boatId');
+      else if (!byBoat[id]) err.push(`${n}: boatId ${id} is not in entries`);
+      else seen[id] = true;
+    });
+    new Set(all.filter((id, k) => id && all.indexOf(id) !== k)).forEach(id => err.push(`${n}: boatId ${id} is listed more than once`));
+    perRace.push({ n, set: new Set(all.concat(ro).filter(Boolean)) });
+  });
+  // every boat that raced must appear in every race (as DNS if it did not start) or its scores misalign
+  Object.keys(seen).forEach(id => perRace.forEach(pr => {
+    if (!pr.set.has(id)) err.push(`${pr.n}: ${s(byBoat[id].member)} (boat ${id}) is missing - list as DNS if it did not start`);
+  }));
+
+  // --- Round registry (rejections only; an unreachable tracker throws and is NOT a validation error) ---
+  if (!err.length) {
+    try { validateRound_v4({ eventID: parsed.eventID, seriesId: series.id, season, roundNo: rn }); }
+    catch (e) { if (e.rejected) err.push(e.message); else throw e; }
+  }
+  return { errors: Array.from(new Set(err)), series };
+}
+
+/** Throws one error listing every problem (used by main_v4). Returns the series. */
+function validateResultsFile_v4(parsed, md) {
+  const r = collectResultsErrors_v4(parsed, md);
+  if (r.errors.length) throw new Error('Results file rejected: ' + r.errors.join('; '));
+  return r.series;
+}
+
+/** Web app 'validate' action: returns the list of errors for a raw results-file JSON ([] = valid). */
+function validateResultsJson_v4(rawData) {
+  return collectResultsErrors_v4(prepareRawData_v4(rawData), getMasterData_v3()).errors;
+}
