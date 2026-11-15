@@ -110,7 +110,7 @@ function doGet(e) {
     if (params.action === 'clearCache') {
       if (params.key !== PropertiesService.getScriptProperties().getProperty('CLEAR_KEY'))
         return json_({ error: 'Forbidden' });
-      clearCachedData('HP_BOOTSTRAP_DATA');
+      forceResetAllCaches();
       return json_({ success: true, message: 'Cache busted successfully' });
     }
   

@@ -22,7 +22,7 @@ function buildMenu() {
 
 
 function generateHexCode() {
-  return Math.floor((1 + Math.random()) * 0x10000000).toString(16).substring(1);
+  return Utilities.getUuid().replace(/-/g, '');
 }
 
 function showAlert(msg) {
@@ -204,6 +204,11 @@ function handleUpdateMember(data) {
   sheet.getRange(row, 19).setValue(updated.committee);
 
   return ContentService.createTextOutput(JSON.stringify({ success: true }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function json(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
