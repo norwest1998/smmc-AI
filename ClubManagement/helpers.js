@@ -19,8 +19,6 @@ function buildMenu() {
   
 }
 
-
-
 function generateHexCode() {
   return Utilities.getUuid().replace(/-/g, '');
 }
@@ -51,7 +49,47 @@ function listMembers(option) {
     .setWidth(1000)
     .setHeight(650);
 
-  SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Member list');
+  try {
+    // Only works when called from an open Google Sheet UI
+    SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Member list');
+  } catch (e) {
+    console.log('List Member error: ' + e);
+    return [];
+  }
+}
+
+function getMember(memberRow) {
+  console.log("In getMember row: " + memberRow);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetById(MembersSheetId); // Ensure MembersSheetId is defined
+  
+  if (!sheet) {
+    throw new Error('Sheet named "Members" not found.');
+  }
+
+  const data = sheet.getDataRange().getValues();
+  const member = [];
+
+  // Start from index 1 to skip header row (index 0)
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const sheetRowNumber = i + 1;
+    if ( sheetRowNumber === memberRow) {
+      member.push({
+        row: sheetRowNumber, // 1-based row number for Range targeting
+        id: row[0],
+        name: row[2],
+        phone: row[7],
+        email: row[8],
+        membershiptype: row[3],
+        committee: row[18],
+        paid: row[6],
+        active: row[1]       
+      });
+      console.log("memberRow: " + member.row + " member Name: " + member.name);
+      return member;
+    }  // Sheet rows are 1-indexed (Row 1 = Headers, Row 2 = First Data Row)
+  }
 }
 
 // Server function called when a member row is clicked in the modal
@@ -65,7 +103,13 @@ function openMemberDialog(email, filterType) {
     .setWidth(750)
     .setHeight(650);
 
-  SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Member Details');
+  try {
+    // Only works when called from an open Google Sheet UI
+    SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Member Details');
+  } catch (e) {
+    console.log('List Member error: ' + e);
+    return [];
+  }
 }
 
 // Fetch member and boat records (Sanitizes Dates to Strings for JSON)

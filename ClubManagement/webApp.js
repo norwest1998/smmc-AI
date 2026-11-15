@@ -4,13 +4,17 @@ function doGet(e) {
   const sheetName = e.parameter.sheet;
   const className = e.parameter.className;
 
-  if (action === "fetch") {
-    const fetchSheet = ss.getSheetByName(sheetName);
-    if (!fetchSheet) return json({ error: `Sheet not found: ${sheetName}` });
-    const values = fetchSheet.getDataRange().getValues();
-    return json({ values });
-  }
+  console.log(action + " " + className);
 
+  if (action === "query") {
+    try {
+      const result = queryMemberContactAgent(query);
+      return json({ success: true, message: result });
+    } catch (err) {
+      return json({ error: err.message });
+    }
+  }
+  
   // --- Member Management page data feeds ---
   if (action === "membersForManagement") {
     return json({ members: getMembersForPaidList() });
@@ -25,6 +29,10 @@ function doGet(e) {
     return json({ members: getMembers("active") });
   }
 
+  if (action === "fetch") {
+    return json(handleFetch(sheetName));
+  }
+  
   const hexCode = (e && e.parameter) ? (e.parameter.id || e.parameter.hexCode || e.parameter.code || "") : "";  
   if (hexCode){
     const template = HtmlService.createTemplateFromFile('Index');
@@ -39,8 +47,20 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  try {
+    return handlePost_(e);
+  } catch (err) {
+    return json({ error: "doPost: " + err.message });
+  }
+}
+
+function handlePost_(e) {
   const body = JSON.parse(e.postData.contents);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  if (body.action && !verifyToken(body.payload.token))   // markOpened stays public for the open-tracker
+    return json({ success: false, code: "AUTH", error: "Unauthorized" });
+ 
   
   if (body.action === "query") {
     try {
@@ -84,12 +104,13 @@ function doPost(e) {
 
   if (body.action === "sendUpdateRequest") {
     try {
-      const result = processEmailRequest(body.member);
-      logAudit("sendUpdateRequest", body.member.name, "", body.member.email, "success", "Update request sent");
+      console.log("calling processEmailRequest");
+      const result = processEmailRequest(body.row);
+      console.log("back from processEmailRequest");
       return json(result);
     } catch (err) {
       logAudit("sendUpdateRequest", body.member && body.member.name, "", "", "error", err.message);
-      return json({ error: err.message });
+      return json({ error: `${err.message}` });
     }
   }
 
@@ -138,6 +159,22 @@ function doPost(e) {
 
   return json({ error: "Unknown action" }, 400);
 }
+
+function handleFetch(sheetName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh   = ss.getSheetByName(sheetName);
+  const data = sh.getDataRange().getValues();
+  if (data.length < 2) return [];
+
+  const headers = data[0].map(h => String(h).trim());
+  return data.slice(1)
+    .filter(row => row.some(c => String(c).trim() !== ""))
+    .map(row => {
+      const obj = {};
+      headers.forEach((h, i) => { if (h) obj[h] = row[i] !== undefined ? row[i] : ""; });
+      return obj;
+    });
+}   
 
 // MAIN FRONTEND API CALL
 function getInitialData(hexCode) {

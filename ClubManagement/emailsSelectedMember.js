@@ -1,5 +1,6 @@
-function processEmailRequest(member) {
-  if (!member || !member.id || !member.email) {
+function processEmailRequest(row) {
+console.log("In processEmailRequest");
+  if (!row) {
     throw new Error("Invalid member details provided.");
   }
 
@@ -12,6 +13,15 @@ function processEmailRequest(member) {
   if (!webAppUrl) {
     throw new Error("Web App URL not found. Ensure this project is deployed as a Web App.");
   }
+console.log("calling getMember row: " + row);
+  const member = getMember(row);
+console.log("back from getMamber " + member.name);
+  MailApp.sendEmail({
+  to: "jwy4tt@gmail.com",
+  subject: "send request",
+  htmlBody: "to: member.email, " + member.email + " subject: subject, " + subject});
+console.log("returning from processEmailRequest status: Email sent to jwy4tt@gmail.com");
+  return {status: "Email sent to jwy4tt@gmail.com"};
 
   const updateLink = `${webAppUrl}?code=${hexCode}`;
 
@@ -56,6 +66,7 @@ function processEmailRequest(member) {
     htmlBody: htmlBody
   });
 
+  logAudit("sendUpdateRequest", member.name, "", member.email, "success", "Update request sent");
   return { status: "success" };
 }
 
