@@ -200,15 +200,6 @@ const REGISTRY = [
     }
   },
   {
-    users: {
-      spreadsheetId: "1nRRzaJ_YBLZKyQbJ0oMQxg5ABRX-ODh3ioh-wVuQJSo",
-      defaultSheet: "AuditLog",
-      sheets: {
-        Users: {key: "UserID", headerRow: 1, headers: ["Email","Role","Name","Active","LoginType","Salt","PwdHash","MustChange","LockedUntil","LastLoginAt","LastActiveAt","LastPage"] },
-      }
-    }
-  },
-  {
     tracking: {
       spreadsheetId: "1T9Hojn4zW7C-2UXg8O8OYKcq_BRYqCHsgU2n3S1IW8o",
       defaultSheet: "Dashboard",
@@ -242,7 +233,7 @@ const REGISTRY = [
       spreadsheetId: "1GyjVfQpgQbxL8TF87Eaa-mFyLdqW_C8oxdl9OZfxYls",
       defaultSheet: "Queue",
       sheets: {
-        Queue: {key: "PostID", headerRow: 1,headers: ["Status","PostType","HexKey","SpreadsheetId","SheetId","SpreadsheetName","SheetName","RegattaName","RaceDate","BackgroundImgID","WeatherSnippet","TagLine","RaceReport","Created","Started","PostID","Completed","Error"]}
+        Queue: {key: "PostID", headerRow: 1,headers: ["Status","SpreadsheetId","SheetId","SpreadsheetName","SheetName","RegattaName","RaceDate","RaceReport","Created","Started","PostID","Completed","Error"]}
       }
     }
   },
@@ -324,7 +315,7 @@ function handleAction(action, payload,e) {
       case "changePassword": {
         const err = changePassword(payload.oldPassword, payload.newPassword);
         if (err) return json({ error: err });
-        const u = lookupUser(CURRENT_USER), exp = Date.now() + TOKEN_TTL_MS;
+        const u = lookupUser(CURRENT_USER), exp = Date.now() + ttlMs_();
         return json({ success: true, token: signToken({ email: CURRENT_USER, role: u.role, exp }),
                       email: CURRENT_USER, name: u.name, role: u.role, exp });
         }
@@ -343,6 +334,25 @@ function handleAction(action, payload,e) {
       case "resetPassword":
         resetPassword(payload.email);
         return json({ success: true });
+
+      case "getRoles": {
+        const c = accessConfig_();
+        return json({ success: true, roles: c.roles, defaultLogin: c.settings.defaultLogin });
+      }
+
+      case "getAccessConfig":
+      case "previewAccessConfig":
+      case "saveAccessConfig":
+      case "listAccessHistory":
+      case "getAccessVersion": {
+        const denied = requireAdmin_(payload); if (denied) return denied;
+        const cfg = typeof payload.config === "string" ? JSON.parse(payload.config) : payload.config;
+        if (action === "getAccessConfig")    return json({ success: true, ...getAccessConfig_(payload.fresh) });
+        if (action === "listAccessHistory")  return json({ success: true, values: listAccessHistory_() });
+        if (action === "getAccessVersion")   return json({ success: true, config: getAccessVersion_(payload.version) });
+        if (action === "previewAccessConfig") return json({ success: true, diff: previewAccess_(cfg) });
+        return json({ success: true, ...saveAccessConfig_(cfg) });
+      }
 
       case "requestRegister":
               requestRegister(payload.email, payload.next);
@@ -405,23 +415,13 @@ function handleAction(action, payload,e) {
             return json({ error: "Preview generation failed: " + err.message });
         }
 
-      case "listBackgroundImages":
-        return json({ success: true, files: listAvailableBackgroundImages() });
-
-      case "processFacebookQueue":
-        processNextFacebookPost();
-        return json({ success: true });
-
       case "aryaResults":
         return respond(JSON.parse(UrlFetchApp.fetch(
                   "https://mysailingresults.com/api/results/get_results.php?eventid=" + encodeURIComponent(payload.eventId)
                 ).getContentText()));
 
       case "refreshCache": 
-        return ok(MANUAL_ResetSystemCache())
-      
-      case "refreshSchema":
-        return ok(refreshSchema());
+        return ok(MANUAL_ResetSystemCache());
       
       case "getRegistry": {
         const forceRefresh = payload.forceRefresh === true || payload.forceRefresh === "true";
@@ -507,6 +507,10 @@ function handleAction(action, payload,e) {
       checkAccess(domain, sheetName, ACTION_CODE[action]);
       return json({ values: findResults(domain, sheetName, payload.filters) });
     }
+    
+    if (action === "layout") {
+      return json({success: true, domain: domain, sheetName: sheetName, layout: getSheetLayout(domain, sheetName)});
+    }
 
     if (action === "svc") {            // server-to-server from the Email Gateway
       const k = PropertiesService.getScriptProperties().getProperty("INTERNAL_KEY");
@@ -530,11 +534,7 @@ function handleAction(action, payload,e) {
     const sheetHeaders = allValues[headerRow] ? allValues[headerRow].map(h => String(h).trim()) : [];
     const headers      = sheetHeaders.length > 0 ? sheetHeaders : (regHeaders ?? []);
     const dataRows    = allValues.slice(headerRow + 1);         
-    const keyCol      = headers.indexOf(keyField);  
-
-    if (action === "layout") {
-      return json({success: true, domain: domain, sheetName: sheet, headerRow: headerRow, headers: headers, keyField: keyField, keyCol, keyCol});
-    }      
+    const keyCol      = headers.indexOf(keyField);        
 
     switch (action) {
       case "append":
@@ -616,16 +616,7 @@ function json(obj) {
 }
 
 function filterAuditForRole_(rows) {
-  const allowed = ROLE_DOMAINS[CURRENT_ROLE] || {};
-  return rows.filter(r => (allowed[String(r["Domain"] || "").trim().toLowerCase()] || "").includes("r"));
-}
-
-function refreshSchema() {
-  const version = Date.now().toString();
-  CacheService.getScriptCache().remove("SYSTEM_REGISTRY_CACHE");
-  PropertiesService.getScriptProperties().setProperty("SCHEMA_VERSION", version);
-  getSystemRegistry(true);          // rebuild from SchemaRegistry sheet and re-cache
-  return { version };
+  return rows.filter(r => roleCodes_(CURRENT_ROLE, String(r["Domain"] || "").trim().toLowerCase()).includes("r"));
 }
 
 // ── Registry Helpers ──────────────────────────────────────────────
@@ -657,6 +648,25 @@ function getKeyField(domain, sheetName) {
 
 function getRegistryHeaders(domain, sheetName) {
   return getSheetConfig(domain, sheetName)?.headers ?? null;
+}
+
+// ── Layout Scraper ───────────────────────────────────────────────────
+function getSheetLayout(domain, sheetName) {
+  const entry = getRegistryEntry(domain);
+  const ss = SpreadsheetApp.openById(entry.spreadsheetId);
+  const sheet = ss.getSheetByName(sheetName);
+
+  if (!sheet) {
+    throw new Error(`Sheet "${sheetName}" not found in domain "${domain}".`);
+  }
+
+  const lastColumn = sheet.getLastColumn();
+  if (lastColumn === 0) {
+    return [];
+  }
+
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  return headers.map(String).map(h => h.trim()).filter(Boolean);
 }
 
 // ── Value Diff Checker ────────────────────────────────────────────
