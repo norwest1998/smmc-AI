@@ -10,18 +10,18 @@ const FOLDERS = {
 };
 
 function doGet(e) {
-console.log("in doGet" + e.parameter)
+
     const action   = e.parameter.action;
     const folderKey = e.parameter.folder;   // "upload" | "processed" | "overall"
     const fileId   = e.parameter.fileId;
-console.log("get GW",e.parameter.folder, e.parameter.name, e.parameter.data, e.parameter.mimeType);
+
     try {
         switch (action) {
             case "listFolder": return listFolder(folderKey);
             case "readFile":   return readFile(fileId);
             case 'listErrorFiles':   return efListErrorFiles_();
             case "updateFile": return updateFile(fileId, e.parameter.data);
-            case "uploadNew":  return uploadNew(e.parameter.folder, e.parameter.name, e.parameter.data, e.parameter.mimeType);
+            case "uploadNew":  return uploadNew(e.parameter.folder, e.parameter.name, e.parameter.id, e.parameter.data, e.parameter.mimeType);
             case "fileMeta":      return fileMeta(e.parameter.fileId);
             case "archiveFile":   return archiveFile(e.parameter.fileId);
             case "listRecursive": return listRecursive(e.parameter.folderId);
@@ -34,13 +34,13 @@ console.log("get GW",e.parameter.folder, e.parameter.name, e.parameter.data, e.p
 }
 
 function doPost(e) {
-console.log("in doPost" + e.postData.contents);
+
     try {
         const body = JSON.parse((e && e.postData && e.postData.contents) || "{}");
         const claims = body.action ? verifyToken(body.token) : null;
         if (body.action && !claims)
             return respond({ success: false, code: "AUTH", error: "Unauthorized" });
-console.log("post GW",body.folder, body.name, body.data, body.mimeType); 
+
         // error-file editor actions (fileGatewayErrors_v4.js)
         const handled = errorFileAction_v4(body.action, body, claims);
         if (handled !== undefined) return respond(handled);
@@ -51,7 +51,7 @@ console.log("post GW",body.folder, body.name, body.data, body.mimeType);
             case "listFolder": return listFolder(body.folder);
             case "readFile":   return readFile(body.fileId);
             case "updateFile": return updateFile(body.fileId, body.data);
-            case "uploadNew":  return uploadNew(body.folder, body.name, body.data, body.mimeType);
+            case "uploadNew":  return uploadNew(body.folder, body.name, e.parameter.id, body.data, body.mimeType);
             case "fileMeta":      return fileMeta(body.fileId);
             case "archiveFile":   return archiveFile(body.fileId);
             case "listRecursive": return listRecursive(body.folderId);
@@ -65,21 +65,30 @@ console.log("post GW",body.folder, body.name, body.data, body.mimeType);
 }
 
 function listFolder(folderKey) {
-    const folderId = FOLDERS[folderKey];
+    const folderId = FOLDERS[folderKey] || folderKey;
     if (!folderId) return respond({ error: "Unknown folder: " + folderKey });
 
     const folder = DriveApp.getFolderById(folderId);
     const files  = [];
-    const it     = folder.getFiles();
-    while (it.hasNext()) {
-        const f = it.next();
-        files.push({
-            id:          f.getId(),
-            name:        f.getName(),
-            createdTime: f.getDateCreated().toISOString(),
-            description: f.getDescription() || ""
-        });
+
+    function scan(fldr) {
+        const it = fldr.getFiles();
+        while (it.hasNext()) {
+            const f = it.next();
+            files.push({
+                id:          f.getId(),
+                name:        f.getName(),
+                createdTime: f.getDateCreated().toISOString(),
+                description: f.getDescription() || ""
+            });
+        }
+        const sub = fldr.getFolders();
+        while (sub.hasNext()) {
+            scan(sub.next());
+        }
     }
+
+    scan(folder);
     return respond({ files });
 }
 
@@ -163,14 +172,16 @@ function updateFile(fileId, b64) {
   return respond({ id: fileId, name: file.getName(), mimeType: file.getMimeType() });
 }
 
-function uploadNew(folderKey, name, b64, mimeType) {
-  console.log("Folder: " + folderKey + " " + name);
+function uploadNew(folderKey, name, id, b64, mimeType) {
   const folderId = FOLDERS[folderKey];
   if (!folderId) return respond({ error: "Unknown folder" });
   if (!name || !b64) return respond({ error: "name and data required" });
   const safeName = String(name).replace(/[\\\/:*?"<>|]/g, "_").slice(0, 200);
   const blob = Utilities.newBlob(Utilities.base64Decode(b64), mimeType || "application/octet-stream", safeName);
   const file = DriveApp.getFolderById(folderId).createFile(blob);
+  const currentDesc = file.getDescription();
+  file.setDescription(currentDesc + " Event: " + String(id).trim());
+
   return respond({ fileId: file.getId(), link: file.getUrl() });
 }
 
@@ -227,19 +238,4 @@ function listRecursive(rootId) {
     } while (pageToken);
   })(rootId, "");
   return respond({ files: out });
-}
-
-function _sig(b) {
-  const secret = PropertiesService.getScriptProperties().getProperty("TOKEN_SECRET");
-  return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(b, secret));
-}
-
-function verifyToken(t) {
-  if (!t || String(t).indexOf(".") < 0) return null;
-  const [b, s] = String(t).split("."), e = _sig(b);
-  let d = s.length ^ e.length;
-  for (let i = 0; i < e.length; i++) d |= (s.charCodeAt(i) || 0) ^ e.charCodeAt(i);
-  if (d) return null;
-  const p = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(b)).getDataAsString());
-  return p.exp > Date.now() ? p : null;
 }
